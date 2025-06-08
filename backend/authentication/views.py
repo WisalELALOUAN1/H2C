@@ -98,3 +98,8 @@ class PasswordResetConfirmView(APIView):
         user.reset_token_expiry = None
         user.save()
         return Response({'message': 'Mot de passe réinitialisé avec succès.'})
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import MyTokenObtainPairSerializer
+
+class MyTokenObtainPairView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
