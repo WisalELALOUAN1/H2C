@@ -9,8 +9,13 @@ from django.utils import timezone
 from datetime import timedelta
 from .models import Utilisateur
 import secrets
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth.hashers import make_password
-
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import MyTokenObtainPairSerializer
+from .serializers import CustomLoginSerializer
+from rest_framework import status
 class RegisterView(APIView):
     def post(self, request):
         serializer = UtilisateurSerializer(data=request.data)
@@ -98,8 +103,36 @@ class PasswordResetConfirmView(APIView):
         user.reset_token_expiry = None
         user.save()
         return Response({'message': 'Mot de passe réinitialisé avec succès.'})
-from rest_framework_simplejwt.views import TokenObtainPairView
-from .serializers import MyTokenObtainPairSerializer
-
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
+class CustomLoginView(APIView):
+    def post(self, request):
+        serializer = CustomLoginSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.validated_data['user']
+            if user.first_login:
+                # Première connexion, demander le changement de mot de passe
+                return Response({'first_login': True, 'message': "Vous devez changer votre mot de passe."}, status=200)
+            # Sinon, login normal avec JWT
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            })
+        return Response(serializer.errors, status=400)
+class FirstPasswordChangeView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        email = request.data.get('email')
+        new_password = request.data.get('new_password')
+        try:
+            user = Utilisateur.objects.get(email=email)
+            if not user.first_login:
+                return Response({'error': 'Mot de passe déjà changé.'}, status=400)
+            user.set_password(new_password)
+            user.first_login = False
+            user.save()
+            return Response({'message': 'Mot de passe mis à jour, vous pouvez vous connecter.'})
+        except Utilisateur.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable.'}, status=404)

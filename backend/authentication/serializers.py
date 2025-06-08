@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Utilisateur
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import authenticate
 class UtilisateurSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     class Meta:
@@ -14,7 +15,6 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        # Tu peux ajouter d'autres infos au token si besoin
         token['email'] = user.email
         token['role'] = user.role
         token['nom'] = user.nom
@@ -43,4 +43,16 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'prenom': user.prenom,
             }
         })
+        return data
+class CustomLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()
+
+    def validate(self, data):
+        user = authenticate(email=data['email'], password=data['password'])
+        if not user:
+            raise serializers.ValidationError("Email ou mot de passe incorrect.")
+        if not user.is_active:
+            raise serializers.ValidationError("Compte inactif.")
+        data['user'] = user
         return data

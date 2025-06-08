@@ -32,7 +32,7 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
     reset_token_expiry = models.DateTimeField(blank=True, null=True)
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['nom', 'prenom', 'role']
-
+    first_login = models.BooleanField(default=True)
     objects = CustomUserManager()
 
     def __str__(self):
