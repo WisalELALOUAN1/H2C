@@ -28,7 +28,8 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)
-
+    reset_token = models.CharField(max_length=128, blank=True, null=True)
+    reset_token_expiry = models.DateTimeField(blank=True, null=True)
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['nom', 'prenom', 'role']
 

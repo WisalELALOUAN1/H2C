@@ -99,11 +99,20 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+print(EMAIL_HOST_USER)
 
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
-
+print(EMAIL_HOST_PASSWORD)
 DEFAULT_FROM_EMAIL = 'SGIRP <' + EMAIL_HOST_USER + '>'
+import smtplib
+
+s = smtplib.SMTP('smtp.gmail.com', 587)
+s.starttls()
+s.login("wissaleln@gmail.com", "nnmz ewom bmzw egfg")
+s.sendmail("wissaleln@gmail.com", "wisalelalouan@gmail.com", "Test SMTP OK")
+s.quit()
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
