@@ -111,18 +111,27 @@ class CustomLoginView(APIView):
         if serializer.is_valid():
             user = serializer.validated_data['user']
             if user.first_login:
-                # Première connexion, demander le changement de mot de passe
                 return Response({'first_login': True, 'message': "Vous devez changer votre mot de passe."}, status=200)
-            # Sinon, login normal avec JWT
             refresh = RefreshToken.for_user(user)
+            # Ajouter les infos utilisateur dans la réponse
+            user_data = {
+                "id": user.id,
+                "email": user.email,
+                "role": user.role,
+                "nom": user.nom,
+                "prenom": user.prenom,
+                "date_joined": user.date_joined.strftime('%Y-%m-%d'),
+                "is_active": user.is_active
+            }
             return Response({
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
+                'user': user_data,
             })
         return Response(serializer.errors, status=400)
+
 class FirstPasswordChangeView(APIView):
     permission_classes = []
-
     def post(self, request):
         email = request.data.get('email')
         new_password = request.data.get('new_password')
