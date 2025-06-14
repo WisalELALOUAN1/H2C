@@ -50,7 +50,18 @@ class RegisterView(APIView):
             email.send(fail_silently=False)
 
             return Response({'message': 'Compte créé ! Vérifiez votre email.'}, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Gestion du cas "email déjà utilisé" (unicité)
+        errors = serializer.errors
+        if "email" in errors:
+            for err in errors["email"]:
+                if "already exists" in str(err) or "existe déjà" in str(err):
+                    return Response(
+                        {"error": "Un compte avec cet email existe déjà."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        # Retourne les autres erreurs telles quelles
+        return Response(errors, status=status.HTTP_400_BAD_REQUEST)
 class PasswordResetRequestView(APIView):
     def post(self, request):
         email = request.data.get('email')
