@@ -16,6 +16,9 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import MyTokenObtainPairSerializer
 from .serializers import CustomLoginSerializer
 from rest_framework import status
+from rest_framework import serializers
+from .serializers import PasswordChangeSerializer, ProfileUpdateSerializer
+
 class RegisterView(APIView):
     def post(self, request):
         serializer = UtilisateurSerializer(data=request.data)
@@ -156,3 +159,24 @@ class FirstPasswordChangeView(APIView):
             return Response({'message': 'Mot de passe mis à jour, vous pouvez vous connecter.'})
         except Utilisateur.DoesNotExist:
             return Response({'error': 'Utilisateur introuvable.'}, status=404)
+        
+class ProfileUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+    def put(self, request):
+        user = request.user
+        serializer = ProfileUpdateSerializer(user, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Profil mis à jour avec succès."})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class PasswordChangeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            user = request.user
+            user.set_password(serializer.validated_data['new_password'])
+            user.save()
+            return Response({"message": "Mot de passe mis à jour avec succès."})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

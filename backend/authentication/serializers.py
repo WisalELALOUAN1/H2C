@@ -56,3 +56,22 @@ class CustomLoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Compte inactif.")
         data['user'] = user
         return data
+class PasswordChangeSerializer(serializers.Serializer):
+    old_password = serializers.CharField()
+    new_password = serializers.CharField()
+
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Ancien mot de passe incorrect.")
+        return value
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Utilisateur
+        fields = ['prenom', 'nom', 'email']  # rôle non modifiable ici
+
+    def validate_email(self, value):
+        user = self.context['request'].user
+        if Utilisateur.objects.exclude(pk=user.pk).filter(email=value).exists():
+            raise serializers.ValidationError("Cet email est déjà utilisé.")
+        return value

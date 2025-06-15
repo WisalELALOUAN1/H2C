@@ -10,6 +10,9 @@ from .views import (
     PasswordResetConfirmView,
     CustomLoginView,
     FirstPasswordChangeView,
+    PasswordChangeSerializer,
+    PasswordChangeView,
+    ProfileUpdateView,
    #MyTokenObtainPairView
 )
 urlpatterns = [
@@ -20,5 +23,7 @@ urlpatterns = [
     path('login/', CustomLoginView.as_view(), name='custom_login'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('first-password-change/', FirstPasswordChangeView.as_view(), name='first_password_change'),
+    path('user/update/', ProfileUpdateView.as_view(), name='user_update'),
+    path('user/change-password/', PasswordChangeView.as_view(), name='user_change_password'),
 
 ]
