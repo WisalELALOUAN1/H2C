@@ -4,20 +4,28 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import Equipe
 from authentication.models import Utilisateur  # on importe le modèle User de l'autre app
-from .serializers import EquipeSerializer, UtilisateurListSerializer
+from .serializers import EquipeSerializer, UtilisateurListSerializer, EquipeCreateUpdateSerializer
 from authentication.serializers import UtilisateurSerializer
 # ==== Equipes ====
 
 class EquipeListCreateView(generics.ListCreateAPIView):
     queryset = Equipe.objects.all()
-    serializer_class = EquipeSerializer
     permission_classes = [permissions.IsAdminUser]
 
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return EquipeCreateUpdateSerializer
+        return EquipeSerializer
+
+# RETRIEVE/UPDATE/DESTROY
 class EquipeRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Equipe.objects.all()
-    serializer_class = EquipeSerializer
     permission_classes = [permissions.IsAdminUser]
 
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return EquipeCreateUpdateSerializer
+        return EquipeSerializer
 
 # ==== Utilisateurs ====
 

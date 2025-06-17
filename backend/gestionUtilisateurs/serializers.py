@@ -15,3 +15,17 @@ class EquipeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Equipe
         fields = ['id', 'nom', 'description', 'manager', 'membres', 'date_creation', 'status']
+
+# ---  (POST/PUT) ---
+class EquipeCreateUpdateSerializer(serializers.ModelSerializer):
+    manager = serializers.PrimaryKeyRelatedField(
+        queryset=Utilisateur.objects.filter(role='manager')
+    )
+    membres = serializers.PrimaryKeyRelatedField(
+        queryset=Utilisateur.objects.filter(role='employe'),
+        many=True
+    )
+
+    class Meta:
+        model = Equipe
+        fields = ['nom', 'description', 'manager', 'membres', 'status']

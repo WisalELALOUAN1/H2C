@@ -5,13 +5,16 @@ from .views import (
     UserListView,
     UserActivationView,
     UserRoleUpdateView,
-    UtilisateurRetrieveUpdateView
+    UtilisateurRetrieveUpdateView,
+    EquipeCreateUpdateSerializer
+    
 )
 
 urlpatterns = [
     # Equipes
     path('equipes/', EquipeListCreateView.as_view(), name='equipes-list-create'),
     path('equipes/<int:pk>/', EquipeRetrieveUpdateDestroyView.as_view(), name='equipes-detail'),
+     path('equipes/create/', EquipeCreateUpdateSerializer, name='equipe-create'),
      # Utilisateurs
     path('users/', UserListView.as_view(), name='users-list'),
     path('users/<int:user_id>/activate/', UserActivationView.as_view(), name='user-activate'),

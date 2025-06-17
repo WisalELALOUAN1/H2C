@@ -23,7 +23,7 @@ class RegisterView(APIView):
     def post(self, request):
         serializer = UtilisateurSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.save()
+            user, temporary_password = serializer.save()
 
             # Envoi du mail de bienvenue avec template HTML
             subject = "Bienvenue sur SGIRP"
@@ -37,6 +37,7 @@ class RegisterView(APIView):
                     "user_name": f"{user.prenom} {user.nom}",
                     "user_email": user.email,
                     "user_role": user.role.capitalize(),
+                    "temporary_password": temporary_password,
                 }
             )
 
@@ -61,7 +62,7 @@ class RegisterView(APIView):
                 if "already exists" in str(err) or "existe déjà" in str(err):
                     return Response(
                         {"error": "Un compte avec cet email existe déjà."},
-                        status=status.HTTP_400_BAD_REQUEST
+                        status=status.HTTP_400_BAD_REQUEST,content_type='application/json'
                     )
         # Retourne les autres erreurs telles quelles
         return Response(errors, status=status.HTTP_400_BAD_REQUEST)
@@ -71,7 +72,7 @@ class PasswordResetRequestView(APIView):
         try:
             user = Utilisateur.objects.get(email=email)
         except Utilisateur.DoesNotExist:
-            return Response({'error': 'Email non trouvé.'}, status=404)
+            return Response({'error': 'Email non trouvé.'}, status=404,content_type='application/json')
 
         # Générer un code unique, valable 1 heure
         reset_token = secrets.token_urlsafe(12)

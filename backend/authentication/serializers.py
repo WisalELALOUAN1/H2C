@@ -2,15 +2,24 @@ from rest_framework import serializers
 from .models import Utilisateur
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import authenticate
+from django.contrib.auth.hashers import make_password
+import secrets
 class UtilisateurSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
     class Meta:
         model = Utilisateur
         fields = ('id', 'email', 'nom', 'prenom', 'role', 'password')
+        extra_kwargs = {
+            'password': {'write_only': True, 'required': False}
+        }
+
     def create(self, validated_data):
-        password = validated_data.pop('password')
-        user = Utilisateur.objects.create_user(password=password, **validated_data)
-        return user
+        temporary_password = secrets.token_urlsafe(8)
+        validated_data['password'] = temporary_password  # Envoi du mot de passe en clair à create_user
+        validated_data['first_login'] = True
+        
+        # create_user va hacher le mot de passe automatiquement
+        user = Utilisateur.objects.create_user(**validated_data)
+        return user, temporary_password
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
