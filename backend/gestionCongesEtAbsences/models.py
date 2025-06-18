@@ -1,11 +1,13 @@
 from django.db import models
 from django.conf import settings
 class ReglesGlobaux(models.Model):
-    jours_ouvrables = models.JSONField(default=list)  # Utilise un tableau de strings
+    jours_ouvrables = models.JSONField(default=list) 
+    jours_feries = models.JSONField(default=list)
     heure_debut_travail = models.TimeField(default="09:00")
     heure_fin_travail = models.TimeField(default="17:00")
     pause_midi_debut = models.TimeField(default="13:30")
     pause_midi_fin = models.TimeField(default="14:00")
+    pays_feries = models.CharField(max_length=100, blank=True, null=True) 
 
     def __str__(self):
         return f"Règles globales ({', '.join(self.jours_ouvrables)})"

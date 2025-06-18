@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ReglesGlobauxRetrieveUpdateView, EmployeDashboardView, DemandeCongeCreateView, ManagerPendingRequestsView, DemandeCongeValidationView, DemandeCongeRetrieveUpdateDestroyView
+from .views import ReglesGlobauxRetrieveUpdateView, EmployeDashboardView, DemandeCongeCreateView, ManagerPendingRequestsView, DemandeCongeValidationView, DemandeCongeRetrieveUpdateDestroyView, HolidayAPIView
 
 urlpatterns = [
     path('regles-globaux/', ReglesGlobauxRetrieveUpdateView.as_view(), name="regles-globaux"),
@@ -8,4 +8,5 @@ urlpatterns = [
     path('manager/demandes-attente/', ManagerPendingRequestsView.as_view()),
     path('manager/valider-demande/<int:demande_id>/', DemandeCongeValidationView.as_view()),
     path('demande-conge/<int:pk>/', DemandeCongeRetrieveUpdateDestroyView.as_view(), name='demande-conge-detail'),
+    path('holidays/', HolidayAPIView.as_view(), name='holidays-api'),
 ]
