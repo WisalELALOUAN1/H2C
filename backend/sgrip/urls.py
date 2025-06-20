@@ -23,4 +23,5 @@ urlpatterns = [
     path("auth/", include("authentication.urls")),
     path("gestion-utilisateurs/", include("gestionUtilisateurs.urls")),
     path("gestion-absences-conges/", include("gestionCongesEtAbsences.urls")),
+    
 ]

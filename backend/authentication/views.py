@@ -181,3 +181,18 @@ class PasswordChangeView(APIView):
             user.save()
             return Response({"message": "Mot de passe mis à jour avec succès."})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        serializer = UtilisateurSerializer(user)
+        return Response(serializer.data)
+
+    def put(self, request):
+        user = request.user
+        serializer = UtilisateurSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Profil mis à jour avec succès."})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

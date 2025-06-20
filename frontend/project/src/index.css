@@ -1,0 +1,203 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom color palette */
+:root {
+  --color-beige-50: #fefdfb;
+  --color-beige-100: #fdf9f2;
+  --color-beige-200: #f9f2e2;
+  --color-beige-300: #f4e8c8;
+  --color-beige-400: #edd9a3;
+  --color-beige-500: #e4c678;
+  --color-beige-600: #d4b05a;
+  --color-beige-700: #b8954a;
+  --color-beige-800: #9d7f42;
+  --color-beige-900: #7d653a;
+
+  --color-brown-50: #faf7f2;
+  --color-brown-100: #f4eee3;
+  --color-brown-200: #e8d7c1;
+  --color-brown-300: #dab896;
+  --color-brown-400: #c8946b;
+  --color-brown-500: #b87b4e;
+  --color-brown-600: #a0522d;
+  --color-brown-700: #8b4513;
+  --color-brown-800: #723a12;
+  --color-brown-900: #5d2f12;
+}
+
+/* Global styles */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #faf7f2;
+  color: #5d2f12;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-beige-100);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-brown-300);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brown-400);
+}
+
+/* Smooth transitions */
+* {
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, 
+              transform 0.2s ease, opacity 0.2s ease;
+}
+
+/* Focus styles */
+button:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(160, 82, 45, 0.1);
+}
+
+/* Animation classes */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(139, 69, 19, 0.15);
+}
+
+/* Button animations */
+.btn-scale:active {
+  transform: scale(0.98);
+}
+
+/* Loading spinner */
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Custom utilities */
+.text-shadow {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.glass-effect {
+  backdrop-filter: blur(10px);
+  background-color: rgba(255, 255, 255, 0.8);
+}
+
+/* Responsive grid utilities */
+.auto-fit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+/* Form styles */
+.form-input {
+  @apply w-full px-3 py-2 border border-brown-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brown-500 focus:border-brown-500 transition-colors;
+}
+
+.form-input:focus {
+  box-shadow: 0 0 0 3px rgba(160, 82, 45, 0.1);
+}
+
+/* Status indicators */
+.status-active {
+  @apply bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium;
+}
+
+.status-inactive {
+  @apply bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium;
+}
+
+.status-pending {
+  @apply bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium;
+}
+
+/* Sidebar specific styles */
+.sidebar-transition {
+  transition: width 0.3s ease, margin-left 0.3s ease;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 1024px) {
+  .sidebar-mobile {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 50;
+  }
+  
+  .main-content-mobile {
+    margin-left: 0 !important;
+  }
+}
+
+/* Enhanced hover effects for interactive elements */
+.interactive-hover {
+  transition: all 0.2s ease;
+}
+
+.interactive-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 69, 19, 0.1);
+}
+
+/* Improved focus states for accessibility */
+.focus-visible:focus-visible {
+  outline: 2px solid var(--color-brown-600);
+  outline-offset: 2px;
+}

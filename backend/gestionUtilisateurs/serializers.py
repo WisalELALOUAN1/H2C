@@ -29,3 +29,16 @@ class EquipeCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Equipe
         fields = ['nom', 'description', 'manager', 'membres', 'status']
+
+class MembreSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Utilisateur
+        fields = ['id', 'prenom', 'nom', 'email', 'role']
+
+class EquipeAvecMembresSerializer(serializers.ModelSerializer):
+    membres = MembreSerializer(many=True, read_only=True)
+    manager = serializers.StringRelatedField()
+
+    class Meta:
+        model = Equipe
+        fields = ['id', 'nom', 'description', 'manager', 'membres']

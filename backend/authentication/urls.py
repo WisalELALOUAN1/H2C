@@ -13,7 +13,8 @@ from .views import (
     PasswordChangeSerializer,
     PasswordChangeView,
     ProfileUpdateView,
-   #MyTokenObtainPairView
+   #MyTokenObtainPairView,
+   UserProfileView,
 )
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
@@ -25,5 +26,6 @@ urlpatterns = [
     path('first-password-change/', FirstPasswordChangeView.as_view(), name='first_password_change'),
     path('user/update/', ProfileUpdateView.as_view(), name='user_update'),
     path('user/change-password/', PasswordChangeView.as_view(), name='user_change_password'),
+    path('user/profile/', UserProfileView.as_view(), name='user_profile'),
 
 ]

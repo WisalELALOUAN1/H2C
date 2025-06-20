@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from gestionUtilisateurs.models import Equipe
 class ReglesGlobaux(models.Model):
     jours_ouvrables = models.JSONField(default=list) 
     jours_feries = models.JSONField(default=list)
@@ -18,13 +19,45 @@ class Parametre(models.Model):
 
 class Formule(models.Model):
     nom_formule = models.CharField(max_length=100)
-    expression = models.TextField()  # e.g. "(jours_travailles * 18) / jours_ouvrables_annuels"
+    expression = models.TextField(
+        help_text="Formule Python. Variables disponibles: jours_travailles, jours_ouvrables_annuels, jours_feries"
+    )
+    est_defaut = models.BooleanField(default=False)
+    publique = models.BooleanField(default=False)
+    date_creation = models.DateTimeField(auto_now_add=True)
 
-class RegleDeConge(models.Model):
-    date_modification = models.DateTimeField(auto_now=True)
-    formule_conge = models.ForeignKey(Formule, on_delete=models.CASCADE)
-    formule_jours_ouvrable = models.ForeignKey(Formule, on_delete=models.CASCADE, related_name="regle_jours_ouvrable")
-    nbr_max_jours_negatif = models.IntegerField(default=-10)
+    def __str__(self):
+        return self.nom_formule
+
+    class Meta:
+        ordering = ['-est_defaut', 'nom_formule']
+class RegleCongé(models.Model):
+    equipe = models.ForeignKey(Equipe, on_delete=models.CASCADE)
+    manager = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    formule_defaut = models.ForeignKey(Formule, on_delete=models.SET_NULL, null=True, blank=True)
+    nbr_max_negatif = models.IntegerField(
+        default=0,
+        help_text="Nombre maximum de jours de congé pouvant être négatif"
+    )
+    jours_ouvrables_annuels = models.IntegerField(
+        default=230,
+        help_text="Calculé automatiquement si vide: (52 semaines * 5 jours) - 18 jours - jours fériés"
+    )
+    jours_acquis_annuels = models.IntegerField(
+        default=18,
+        help_text="Nombre de jours de congé acquis par an"
+    )
+    date_mise_a_jour = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.jours_ouvrables_annuels:
+            regles_globales = ReglesGlobaux.objects.first()
+            nb_feries = len(regles_globales.jours_feries) if regles_globales else 10
+            self.jours_ouvrables_annuels = (52 * 5) - 18 - nb_feries
+        super().save(*args, **kwargs)
+
+    class Meta:
+        unique_together = ('equipe', 'manager')
 
 class HistoriqueSolde(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -45,3 +78,23 @@ class DemandeConge(models.Model):
     commentaire = models.TextField(blank=True)
     demi_jour = models.BooleanField(default=False)
     date_soumission = models.DateTimeField(auto_now_add=True)
+class RegleCongé(models.Model):
+    equipe = models.ForeignKey(Equipe, on_delete=models.CASCADE)  # Référence directe
+    manager = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    formule_defaut = models.ForeignKey(Formule, on_delete=models.SET_NULL, null=True, blank=True)
+    jours_ouvrables_annuels = models.IntegerField(default=230)
+    jours_acquis_annuels = models.IntegerField(default=18)
+    date_mise_a_jour = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    class Meta:
+        unique_together = ('equipe', 'manager')
+
+class RegleMembrePersonnalisée(models.Model):
+    regle_equipe = models.ForeignKey(RegleCongé, on_delete=models.CASCADE)
+    membre = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    formule_personnalisee = models.TextField(blank=True)
+    jours_ouvrables_perso = models.IntegerField(null=True, blank=True)
+    actif = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ('regle_equipe', 'membre')

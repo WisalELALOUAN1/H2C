@@ -2,9 +2,10 @@ from django.shortcuts import render
 from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied, NotFound
 from .models import Equipe
 from authentication.models import Utilisateur  # on importe le modèle User de l'autre app
-from .serializers import EquipeSerializer, UtilisateurListSerializer, EquipeCreateUpdateSerializer
+from .serializers import EquipeSerializer, UtilisateurListSerializer, EquipeCreateUpdateSerializer, EquipeAvecMembresSerializer
 from authentication.serializers import UtilisateurSerializer
 # ==== Equipes ====
 
@@ -70,3 +71,22 @@ class UtilisateurRetrieveUpdateView(generics.RetrieveUpdateAPIView):
     queryset = Utilisateur.objects.all()
     serializer_class = UtilisateurSerializer
     permission_classes = [permissions.IsAdminUser]
+class EquipeMembresListView(generics.ListAPIView):
+    """
+    Vue pour récupérer toutes les équipes avec leurs membres
+    Seuls les managers peuvent voir leurs équipes et membres
+    """
+    serializer_class = EquipeAvecMembresSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        # Récupérer seulement les équipes dont l'utilisateur est manager
+        return Equipe.objects.filter(manager=self.request.user).prefetch_related('membres')
+
+    def list(self, request, *args, **kwargs):
+        print(f"Tentative d'accès aux équipes par {request.user}")
+        try:
+            return super().list(request, *args, **kwargs)
+        except Exception as e:
+            print(f"Erreur: {str(e)}")
+            raise

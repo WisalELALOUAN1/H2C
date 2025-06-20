@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ReglesGlobaux, DemandeConge, HistoriqueSolde # Import des modèles nécessaires
+from .models import ReglesGlobaux, DemandeConge, HistoriqueSolde,Formule, RegleCongé, RegleMembrePersonnalisée # Import des modèles nécessaires
 from datetime import date
 class ReglesGlobauxSerializer(serializers.ModelSerializer):
     class Meta:
@@ -31,3 +31,45 @@ class HistoriqueSoldeSerializer(serializers.ModelSerializer):
     class Meta:
         model = HistoriqueSolde
         fields = '__all__'
+class FormuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Formule
+        fields = '__all__'
+class RegleCongeSerializer(serializers.ModelSerializer):
+    jours_conges_acquis = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RegleCongé
+        fields = [
+            'id',
+            'equipe',
+            'formule_defaut',
+            'jours_ouvrables_annuels',
+            'jours_acquis_annuels',
+            'date_mise_a_jour',
+            'jours_conges_acquis',  # champ calculé exposé
+        ]
+
+    def get_jours_conges_acquis(self, obj):
+        # Récupérer le contexte de la requête
+        request = self.context.get('request')
+
+        # Valeurs par défaut si non fournies dans la requête
+        jours_travailles = 230
+        if request and request.data.get('jours_travailles'):
+            try:
+                jours_travailles = int(request.data.get('jours_travailles'))
+            except (TypeError, ValueError):
+                pass
+
+        jours_ouvrables_annuels = obj.jours_ouvrables_annuels or 0
+
+        # Appeler la fonction de calcul avec ces valeurs
+        return calculer_conges_acquis(jours_travailles, jours_ouvrables_annuels)
+class RegleMembreSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RegleMembrePersonnalisée
+        fields = ['regle_equipe', 'membre']
+        read_only_fields = ['regle_equipe']  # Pour éviter que le membre modifie la règle de l'équipe
+def calculer_conges_acquis(jours_travailles, jours_ouvrables_annuels=230):
+    return (jours_travailles * 18) / jours_ouvrables_annuels
