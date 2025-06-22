@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import * as React from 'react';
 import { Clock, Calendar, Plus, Edit } from 'lucide-react';
 
 const TimesheetManagement: React.FC = () => {

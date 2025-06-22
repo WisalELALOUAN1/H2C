@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from gestionUtilisateurs.models import Equipe
+import json
 class ReglesGlobaux(models.Model):
     jours_ouvrables = models.JSONField(default=list) 
     jours_feries = models.JSONField(default=list)
@@ -18,19 +19,22 @@ class Parametre(models.Model):
     est_const = models.BooleanField(default=False)
 
 class Formule(models.Model):
-    nom_formule = models.CharField(max_length=100)
-    expression = models.TextField(
-        help_text="Formule Python. Variables disponibles: jours_travailles, jours_ouvrables_annuels, jours_feries"
-    )
+    nom_formule = models.CharField(max_length=255)
+    expressions = models.JSONField(default=dict)
     est_defaut = models.BooleanField(default=False)
-    publique = models.BooleanField(default=False)
-    date_creation = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.nom_formule
+    publique = models.BooleanField(default=True)
 
     class Meta:
-        ordering = ['-est_defaut', 'nom_formule']
+        ordering = ['nom_formule']
+
+    def get_expressions(self):
+        try:
+            return json.loads(self.expressions)
+        except Exception:
+            return {}
+
+    class Meta:
+        ordering = [ 'nom_formule']
 class RegleCongé(models.Model):
     equipe = models.ForeignKey(Equipe, on_delete=models.CASCADE)
     manager = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -47,6 +51,7 @@ class RegleCongé(models.Model):
         default=18,
         help_text="Nombre de jours de congé acquis par an"
     )
+    
     date_mise_a_jour = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     def save(self, *args, **kwargs):
@@ -78,16 +83,7 @@ class DemandeConge(models.Model):
     commentaire = models.TextField(blank=True)
     demi_jour = models.BooleanField(default=False)
     date_soumission = models.DateTimeField(auto_now_add=True)
-class RegleCongé(models.Model):
-    equipe = models.ForeignKey(Equipe, on_delete=models.CASCADE)  # Référence directe
-    manager = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    formule_defaut = models.ForeignKey(Formule, on_delete=models.SET_NULL, null=True, blank=True)
-    jours_ouvrables_annuels = models.IntegerField(default=230)
-    jours_acquis_annuels = models.IntegerField(default=18)
-    date_mise_a_jour = models.DateTimeField(auto_now=True, null=True, blank=True)
 
-    class Meta:
-        unique_together = ('equipe', 'manager')
 
 class RegleMembrePersonnalisée(models.Model):
     regle_equipe = models.ForeignKey(RegleCongé, on_delete=models.CASCADE)

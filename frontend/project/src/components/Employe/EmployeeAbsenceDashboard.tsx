@@ -5,6 +5,7 @@ import { LeaveRequest } from '../../types';
 
 interface DashboardData {
   solde: number;
+  max_negatif: number; 
   demandes: LeaveRequest[];
 }
 
@@ -21,7 +22,9 @@ const EmployeeAbsenceDashboard: React.FC = () => {
       const res = await fetch('http://localhost:8000/gestion-absences-conges/employe/dashboard/', {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log(res)
       const resData = await res.json();
+      console.log
       setData(resData);
     } catch (error) {
       console.error("Erreur lors du chargement du dashboard:", error);
@@ -41,6 +44,7 @@ const EmployeeAbsenceDashboard: React.FC = () => {
   };
 
   const handleEdit = (request: LeaveRequest) => {
+    console.log("nomre negative", data?.max_negatif)
     setEditingRequest(request);
     setShowForm(true);
   };
@@ -228,15 +232,17 @@ const EmployeeAbsenceDashboard: React.FC = () => {
       </div>
 
       {showForm && (
-        <LeaveRequestForm 
-          onClose={() => {
-            setShowForm(false);
-            setEditingRequest(null);
-          }} 
-          onSuccess={handleSuccess}
-          existingRequest={editingRequest}
-        />
-      )}
+      <LeaveRequestForm 
+        onClose={() => {
+          setShowForm(false);
+          setEditingRequest(null);
+        }} 
+        onSuccess={handleSuccess}
+        existingRequest={editingRequest}
+
+        maxNegatif={data?.max_negatif ?? 0} // Passez la valeur max_negatif du dashboard
+      />
+    )}
     </div>
   );
 };

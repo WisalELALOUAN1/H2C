@@ -47,7 +47,9 @@ class RegleCongeSerializer(serializers.ModelSerializer):
             'jours_ouvrables_annuels',
             'jours_acquis_annuels',
             'date_mise_a_jour',
-            'jours_conges_acquis',  # champ calculé exposé
+            'jours_conges_acquis',
+            'nbr_max_negatif',
+              # champ calculé exposé
         ]
 
     def get_jours_conges_acquis(self, obj):
@@ -73,3 +75,5 @@ class RegleMembreSerializer(serializers.ModelSerializer):
         read_only_fields = ['regle_equipe']  # Pour éviter que le membre modifie la règle de l'équipe
 def calculer_conges_acquis(jours_travailles, jours_ouvrables_annuels=230):
     return (jours_travailles * 18) / jours_ouvrables_annuels
+def calculer_jours_ouvrables_annuels(nb_feries=10):
+    return (52*5) - 18 - nb_feries

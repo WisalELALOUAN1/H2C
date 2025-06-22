@@ -13,6 +13,7 @@ from .serializers import (
     DemandeCongeSerializer,
     HistoriqueSoldeSerializer
 )
+from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
@@ -30,6 +31,8 @@ from datetime import datetime, date
 import json
 import requests
 import calendar
+from rest_framework import permissions
+import math
 from .serializers import calculer_conges_acquis
 class ReglesGlobauxRetrieveUpdateView(generics.RetrieveUpdateAPIView):
     queryset = ReglesGlobaux.objects.all()
@@ -40,18 +43,50 @@ class ReglesGlobauxRetrieveUpdateView(generics.RetrieveUpdateAPIView):
         # Toujours retourner la 1re config (ou la crée si absente)
         obj, created = ReglesGlobaux.objects.get_or_create(pk=1)
         return obj
+
+
+
+
 class EmployeDashboardView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        # Solde actuel
-        solde = HistoriqueSolde.objects.filter(user=user).order_by('-date_modif').first()
-        # Historique des demandes
-        demandes = DemandeConge.objects.filter(user=user).order_by('-date_soumission')
+        
+        # Récupérer les équipes auxquelles il appartient
+        equipes = user.equipes_membre.all()
+        
+        regle = None
+        if equipes.exists():
+            regle = RegleCongé.objects.filter(equipe__in=equipes).first()
+
+        if regle:
+            jours_acquis_annuels = regle.jours_acquis_annuels
+            print("DEBUG: Jours acquis annuels:", jours_acquis_annuels)
+            jours_ouvrables_annuels = regle.jours_ouvrables_annuels
+            jours_max_negatif = regle.nbr_max_negatif
+        else:
+            jours_acquis_annuels = 18
+            jours_ouvrables_annuels = 230
+            jours_max_negatif = 0
+
+        # Congés validés
+        conges_valides = DemandeConge.objects.filter(user=user, status='validé')
+        print("DEBUG: Congés validés:", conges_valides)
+        total_utilise = sum(
+        ((c.date_fin - c.date_debut).days + 1) - (0.5 if c.demi_jour else 0) for c in conges_valides)
+
+
+        # Solde dynamique
+        solde_calcule = round((jours_acquis_annuels * 1.0) - total_utilise, 2)
+        print("max jours negatifs:", jours_max_negatif)
         return Response({
-            "solde": solde.solde_actuel if solde else 0,
-            "demandes": DemandeCongeSerializer(demandes, many=True).data
+            "solde": solde_calcule,
+            "max_negatif": jours_max_negatif,
+            "demandes": DemandeCongeSerializer(
+                DemandeConge.objects.filter(user=user).order_by('-date_soumission'),
+                many=True
+            ).data
         })
 class DemandeCongeCreateView(generics.CreateAPIView):
     serializer_class = DemandeCongeSerializer
@@ -248,6 +283,8 @@ class FormuleListView(generics.ListCreateAPIView):
     queryset = Formule.objects.filter(publique=True)
     serializer_class = FormuleSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
+    
 
 class DemandeCongeViewSet(viewsets.ModelViewSet):
     """Gestion des demandes de congé"""
@@ -376,7 +413,7 @@ class RegleCongeViewSet(viewsets.ModelViewSet):
             jours_acquis = 18
 
         jours_ouvrables_annuels = self.calculer_jours_ouvrables(jours_acquis)
-
+        nbr_max_negatif = self.request.data.get('nbr_max_negatif', 0)
         # Calcul dynamique, non stocké
         try:
             jours_travailles = int(self.request.data.get('jours_travailles', 230))
@@ -392,6 +429,7 @@ class RegleCongeViewSet(viewsets.ModelViewSet):
             formule_defaut=self.get_formule(),
             jours_acquis_annuels=jours_acquis,
             jours_ouvrables_annuels=jours_ouvrables_annuels,
+            nbr_max_negatif=nbr_max_negatif,
             # jours_conges_acquis=jours_conges_acquis  # Optionnel si tu as ce champ en base
         )
 
@@ -404,6 +442,7 @@ class RegleCongeViewSet(viewsets.ModelViewSet):
             jours_acquis = instance.jours_acquis_annuels
 
         jours_ouvrables_annuels = self.calculer_jours_ouvrables(jours_acquis)
+        nbr_max_negatif = self.request.data.get('nbr_max_negatif', serializer.instance.nbr_max_negatif)
 
         try:
             jours_travailles = int(self.request.data.get('jours_travailles', 230))
@@ -411,11 +450,12 @@ class RegleCongeViewSet(viewsets.ModelViewSet):
             jours_travailles = 230
 
         jours_conges_acquis = calculer_conges_acquis(jours_travailles, jours_ouvrables_annuels)
-
+        print("nbr max négatif:", nbr_max_negatif)
         serializer.save(
             formule_defaut=self.get_formule(),
             jours_acquis_annuels=jours_acquis,
             jours_ouvrables_annuels=jours_ouvrables_annuels,
+            nbr_max_negatif=nbr_max_negatif,
             # jours_conges_acquis=jours_conges_acquis
         )
 

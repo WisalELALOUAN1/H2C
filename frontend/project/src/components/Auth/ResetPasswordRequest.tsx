@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, ArrowLeft, Send, Loader2, ShieldCheck } from 'lucide-react';
-
+import { resetPasswordRequestApi } from '../../services/api';
 export default function ResetPasswordRequest() {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
@@ -15,21 +16,16 @@ export default function ResetPasswordRequest() {
     setError('');
     setLoading(true);
 
-    const res = await fetch('http://localhost:8000/auth/password-reset/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    const data = await res.json();
+    const result = await resetPasswordRequestApi(email);
     setLoading(false);
 
-    if (res.ok) {
-      setMessage('Un code a été envoyé à votre email.');
+    if (result.success) {
+      setMessage(result.message || 'Un code a été envoyé à votre email.');
       setTimeout(() => {
         navigate('/reset-password-confirm', { state: { email } });
       }, 1000);
     } else {
-      setError(data.error || "Erreur lors de l'envoi du code.");
+      setError(result.error || "Erreur lors de l'envoi du code.");
     }
   };
 

@@ -5,9 +5,10 @@ class GestioncongesetabsencesConfig(AppConfig):
     name = "gestionCongesEtAbsences"
 
     def ready(self):
-        from .formules_init import creer_formules_par_defaut
+        # Appelé automatiquement au démarrage
         try:
+            from .formules_init import creer_formules_par_defaut
             creer_formules_par_defaut()
-        except Exception:
-            # Évite les erreurs lors des premières migrations ou tests
-            pass
+        except Exception as e:
+            #  Ne pas faire de requêtes DB avant les migrations
+            print(f"[Formules par défaut non créées] {e}")

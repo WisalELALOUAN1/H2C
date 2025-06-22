@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import  { useState } from 'react';
+import * as React from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
@@ -14,10 +15,11 @@ import ProjectsManagement from '../Manager/ProjectsManagement.tsx';
 import TasksManagement from '../Employe/TasksManagement.tsx';
 import TimesheetManagement from '../Employe/TimesheetManagement.tsx';
 import EmployeeAbsenceDashboard from '../Employe/EmployeeAbsenceDashboard';
-import CalendarView from '../Shared/CalendarView.tsx';
 import SettingsView from '../Shared/SettingsView.tsx';
 import ManagerPendingRequests from '../Manager/ManagerPendingRequests.tsx';
 import RegleCongeManager from '../Manager/RegleConge';
+import CalendarView from '../Employe/CalendarView.tsx';
+
 const MainLayout: React.FC = () => {
   const { user } = useAuth();
   console.log('Utilisateur connecté:', user);
@@ -66,12 +68,13 @@ const MainLayout: React.FC = () => {
             return <TeamManagement />;
           case 'projects':
             return <ProjectsManagement />;
-          case 'calendar':
-            return <CalendarView />;
+          
           case 'requests':
             return <ManagerPendingRequests />;
           case 'leave-rules':
             return <RegleCongeManager />;
+          case 'settings':
+            return <SettingsView />;
           default:
             return <div className="p-6 text-center text-brown-600">Section en développement</div>;
         }
@@ -86,6 +89,8 @@ const MainLayout: React.FC = () => {
             return <CalendarView />;
           case 'absences':
             return <EmployeeAbsenceDashboard />;
+          case 'settings':
+            return <SettingsView />;
           default:
             return <div className="p-6 text-center text-brown-600">Section en développement</div>;
         }

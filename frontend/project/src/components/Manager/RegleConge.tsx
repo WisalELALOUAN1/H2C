@@ -1,644 +1,548 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+"use client"
+import * as React from 'react';
+import { useState, useEffect } from "react"
 import {
-  Select,
-  Button,
-  Card,
-  message,
-  Table,
-  Tag,
-  Form,
-  InputNumber,
-  Modal,
-  Typography,
-  Divider,
-  Space,
-  Row,
-  Col
-} from 'antd';
-import { EditOutlined, SettingOutlined, BookOutlined } from '@ant-design/icons';
-import axios from 'axios';
-import { Formule, Equipe } from '../../types';
-const { Option } = Select;
-const { Text, Title } = Typography;
+  Settings,
+  Edit,
+  BookOpen,
+  Users,
+  Calendar,
+  Calculator,
+  Clock,
+  AlertCircle,
+  CheckCircle2,
+  X,
+} from "lucide-react"
+import { useAuth } from "../../contexts/AuthContext"
+import { fetchTeamRulesApi, saveTeamRulesApi, fetchFormulasApi, fetchManagerTeamsApi } from "../../services/api"
 
-interface RegleConge {
-  id: number;
-  equipe: number;
-  formule_defaut: Formule;
-  jours_ouvrables_annuels: number;
-  jours_acquis_annuels: number;
-  jours_conges_acquis?: number;
-  date_mise_a_jour: string;
+interface Formule {
+  id: number
+  nom_formule: string
+  expressions: Record<string, string>
 }
 
-const formatDate = (isoString: string) => {
-  const date = new Date(isoString);
-  const day = date.getDate().toString().padStart(2, '0');
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  return `${day}/${month} - ${hours}:${minutes}`;
-};
+interface RegleConge {
+  id?: number
+  equipe: number
+  formule_defaut: Formule | number
+  jours_ouvrables_annuels: number
+  jours_acquis_annuels: number
+  jours_conges_acquis?: number
+  jours_travailles: number
+  nb_feries: number
+  nbr_max_negatif: number
+  date_mise_a_jour: string
+}
+
+interface Equipe {
+  id: number
+  nom: string
+}
 
 const TeamRulesConfig: React.FC = () => {
-  const { user, logout } = useAuth();
-  const [equipes, setEquipes] = useState<Equipe[]>([]);
-  const [selectedEquipe, setSelectedEquipe] = useState<number | null>(null);
-  const [regleEquipe, setRegleEquipe] = useState<RegleConge | null>(null);
-  const [formules, setFormules] = useState<Formule[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [form] = Form.useForm();
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  const { user } = useAuth()
+  const [equipes, setEquipes] = useState<Equipe[]>([])
+  const [selectedEquipe, setSelectedEquipe] = useState<number | null>(null)
+  const [regleEquipe, setRegleEquipe] = useState<RegleConge | null>(null)
+  const [formules, setFormules] = useState<Formule[]>([])
+  const [loading, setLoading] = useState(false)
+  const [isModalVisible, setIsModalVisible] = useState(false)
+  const [error, setError] = useState("")
+  const [formData, setFormData] = useState({
+    formule_defaut: "",
+    jours_acquis_annuels: 25,
+    jours_travailles: 230,
+    nb_feries: 10,
+    nbr_max_negatif: 0
+  })
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({})
 
-  const api = axios.create({
-    baseURL: 'http://localhost:8000',
-    headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
-  });
-
-  api.interceptors.response.use(
-    response => response,
-    error => {
-      if (error.response?.status === 401) {
-        logout();
-        message.error('Session expirée. Veuillez vous reconnecter.');
-      }
-      return Promise.reject(error);
+  useEffect(() => {
+    if (user?.role !== "manager" && user?.role !== "admin") {
+      setError("Cette fonctionnalité est réservée aux managers et administrateurs.")
+      return
     }
-  );
+
+    if (user?.role === "manager") {
+      fetchData()
+    }
+  }, [user])
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const equipesResponse = await api.get('/gestion-utilisateurs/manager/mes-equipes/');
-        setEquipes(equipesResponse.data);
-        if (equipesResponse.data.length > 0) setSelectedEquipe(equipesResponse.data[0].id);
-        const formulesResponse = await api.get('/gestion-absences-conges/formules/');
-        setFormules(formulesResponse.data);
-      } catch {
-        message.error('Erreur lors du chargement des données');
-      } finally {
-        setLoading(false);
+    if (selectedEquipe) {
+      fetchRegleEquipe()
+    }
+  }, [selectedEquipe])
+
+  const fetchData = async () => {
+    setLoading(true)
+    setError("")
+    try {
+      const [equipesData, formulesData] = await Promise.all([
+        fetchManagerTeamsApi(),
+        fetchFormulasApi()
+      ])
+
+      setEquipes(equipesData)
+      setFormules(formulesData)
+
+      if (equipesData.length > 0) {
+        setSelectedEquipe(equipesData[0].id)
+      } else {
+        setError("Aucune équipe trouvée. Vous devez être assigné à au moins une équipe pour utiliser cette fonctionnalité.")
       }
-    };
-    if (user?.role === 'manager') fetchData();
-  }, [user]);
-
-  useEffect(() => {
-    if (selectedEquipe) fetchRegleEquipe();
-  }, [selectedEquipe]);
+    } catch (err: any) {
+      console.error("Erreur détaillée:", err)
+      setError(err.message || "Erreur lors du chargement des données")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const fetchRegleEquipe = async () => {
+    if (!selectedEquipe) return
+
+    setLoading(true)
     try {
-      setLoading(true);
-      const response = await api.get(`/gestion-absences-conges/regles-conge/?equipe=${selectedEquipe}`);
-      if (response.data.length > 0) {
-        setRegleEquipe(response.data[0]);
-        form.setFieldsValue({
-          ...response.data[0],
-          formule_defaut: response.data[0].formule_defaut?.id,
-          jours_travailles: response.data[0].jours_travailles ?? 230,
-          nb_feries: response.data[0].nb_feries ?? 10
-        });
+      const data = await fetchTeamRulesApi(selectedEquipe)
+      if (data) {
+        setRegleEquipe(data)
+        setFormData({
+          formule_defaut: typeof data.formule_defaut === "object" ? data.formule_defaut.id : data.formule_defaut,
+          jours_acquis_annuels: data.jours_acquis_annuels,
+          jours_travailles: data.jours_travailles || 230,
+          nb_feries: data.nb_feries || 10,
+          nbr_max_negatif: data.nbr_max_negatif ?? 0
+        })
       } else {
-        setRegleEquipe(null);
-        form.resetFields();
+        setRegleEquipe(null)
+        setFormData({
+          formule_defaut: "",
+          jours_acquis_annuels: 25,
+          jours_travailles: 230,
+          nb_feries: 10,
+          nbr_max_negatif: 0
+        })
       }
-    } catch {
-      message.error('Erreur lors du chargement des règles');
+    } catch (err: any) {
+      console.error("Erreur lors du chargement des règles:", err)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
+
+  const validateForm = () => {
+    const errors: { [key: string]: string } = {}
+
+    if (!formData.formule_defaut) {
+      errors.formule_defaut = "Veuillez sélectionner une formule"
+    }
+    if (formData.jours_acquis_annuels < 1 || formData.jours_acquis_annuels > 365) {
+      errors.jours_acquis_annuels = "Les jours acquis doivent être entre 1 et 365"
+    }
+    if (formData.jours_travailles < 1 || formData.jours_travailles > 365) {
+      errors.jours_travailles = "Les jours travaillés doivent être entre 1 et 365"
+    }
+    if (formData.nb_feries < 0 || formData.nb_feries > 50) {
+      errors.nb_feries = "Le nombre de jours fériés doit être entre 0 et 50"
+    }
+    if (formData.nbr_max_negatif < 0 || formData.nbr_max_negatif > 30) {
+      errors.nbr_max_negatif = "Le nombre maximal de jours négatifs doit être entre 0 et 30"
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
 
   const handleSave = async () => {
+    if (!validateForm() || !selectedEquipe) return
+
+    setLoading(true)
     try {
-      const values = await form.validateFields();
-      if (!selectedEquipe) {
-        message.error("Veuillez sélectionner une équipe.");
-        return;
-      }
-      const data = {
+      const payload = {
         equipe: selectedEquipe,
-        ...values
-      };
-
-      if (regleEquipe) {
-        await api.put(`/gestion-absences-conges/regles-conge/${regleEquipe.id}/`, data);
-        message.success('Règles mises à jour avec succès');
-      } else {
-        await api.post('/gestion-absences-conges/regles-conge/', data);
-        message.success('Règles créées avec succès');
+        formule_defaut: Number(formData.formule_defaut),
+        jours_acquis_annuels: formData.jours_acquis_annuels,
+        jours_travailles: formData.jours_travailles,
+        nb_feries: formData.nb_feries,
+        nbr_max_negatif: formData.nbr_max_negatif
       }
 
-      setIsModalVisible(false);
-      fetchRegleEquipe();
-    } catch {
-      message.error('Erreur lors de la sauvegarde');
+      await saveTeamRulesApi(selectedEquipe, payload, !!regleEquipe)
+      setIsModalVisible(false)
+      await fetchRegleEquipe()
+      showNotification("Règles sauvegardées avec succès", "success")
+    } catch (err: any) {
+      showNotification(err.message || "Erreur lors de la sauvegarde", "error")
+    } finally {
+      setLoading(false)
     }
-  };
+  }
 
-  const columns = [
-    {
-      title: 'Formule',
-      key: 'formule',
-      render: (_: any, record: RegleConge) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <SettingOutlined style={{ color: '#8B4513' }} />
-          <Text strong style={{ color: '#5D4037' }}>
-            {record.formule_defaut ? record.formule_defaut.nom_formule : '—'}
-          </Text>
-        </div>
-      )
-    },
-    {
-      title: 'Jours ouvrables annuels',
-      dataIndex: 'jours_ouvrables_annuels',
-      key: 'jours_ouvrables_annuels',
-      render: (jours: number) => (
-        <Tag 
-          style={{ 
-            backgroundColor: '#FEFCF8', 
-            color: '#8B4513', 
-            border: '1px solid #E8D5C4',
-            borderRadius: '8px',
-            fontWeight: '600'
-          }}
-        >
-          {jours} jours
-        </Tag>
-      )
-    },
-    {
-      title: 'Jours acquis annuels',
-      dataIndex: 'jours_acquis_annuels',
-      key: 'jours_acquis_annuels',
-      render: (jours: number) => (
-        <Tag 
-          style={{ 
-            backgroundColor: '#FFFFFF', 
-            color: '#8B4513', 
-            border: '1px solid #D2B48C',
-            borderRadius: '8px',
-            fontWeight: '600'
-          }}
-        >
-          {jours} jours
-        </Tag>
-      )
-    },
-    {
-      title: 'Jours de congés acquis (calculés)',
-      dataIndex: 'jours_conges_acquis',
-      key: 'jours_conges_acquis',
-      render: (jours?: number) =>
-        jours !== undefined && jours !== null ? (
-          <Tag 
-            style={{ 
-              backgroundColor: '#FFFFFF', 
-              color: '#8B4513', 
-              border: '1px solid #C19A6B',
-              borderRadius: '8px',
-              fontWeight: '600'
-            }}
-          >
-            {Math.round(jours)} jours
-          </Tag>
-        ) : (
-          <Tag 
-            style={{ 
-              backgroundColor: '#FEFCF8', 
-              color: '#A0826D', 
-              border: '1px solid #E8D5C4',
-              borderRadius: '8px'
-            }}
-          >
-            Non calculé
-          </Tag>
-        )
-    },
-    {
-      title: 'Dernière mise à jour',
-      dataIndex: 'date_mise_a_jour',
-      key: 'date_mise_a_jour',
-      render: (dateStr: string) => (
-        <Text style={{ color: '#8B4513', fontSize: '13px' }}>
-          {formatDate(dateStr)}
-        </Text>
-      )
-    }
-  ];
+  const showNotification = (message: string, type: "success" | "error") => {
+    const notification = document.createElement("div")
+    const bgColor = type === "success" 
+      ? "bg-green-100 border-green-400 text-green-800" 
+      : "bg-red-100 border-red-400 text-red-800"
 
-  const customStyles = `
-    .team-rules-container {
-      min-height: 100vh;
-      background: linear-gradient(135deg, #FEFCF8 0%, #F8F6F2 100%);
-      padding: 24px;
+    notification.className = `fixed top-4 right-4 ${bgColor} px-4 py-3 rounded-lg shadow-lg z-50 border`
+    notification.innerHTML = `
+      <div class="flex items-center space-x-2">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
+        </svg>
+        <span>${message}</span>
+      </div>
+    `
+    document.body.appendChild(notification)
+    setTimeout(() => notification.remove(), 4000)
+  }
+
+  const formatDate = (isoString: string) => {
+    const date = new Date(isoString)
+    return date.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+
+  const handleFormChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: "" }))
     }
-    
-    .main-card {
-      background: #FFFFFF;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(139, 69, 19, 0.08);
-      border: 1px solid #F0E8DC;
-    }
-    
-    .main-card .ant-card-head {
-      background: linear-gradient(135deg, #F5E6D3 0%, #E8D5C4 100%);
-      border-radius: 16px 16px 0 0;
-      border-bottom: 1px solid #E0D0C4;
-    }
-    
-    .main-card .ant-card-head-title {
-      color: #8B4513 !important;
-      font-weight: 600;
-      font-size: 18px;
-    }
-    
-    .main-card .ant-card-extra .ant-btn-primary {
-      background: linear-gradient(135deg, #D2B48C 0%, #DDD0C8 100%);
-      border: 1px solid #C19A6B;
-      color: #5D4037;
-      font-weight: 600;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(139, 69, 19, 0.15);
-    }
-    
-    .main-card .ant-card-extra .ant-btn-primary:hover {
-      background: linear-gradient(135deg, #C19A6B 0%, #D2B48C 100%);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(139, 69, 19, 0.2);
-    }
-    
-    .team-select {
-      background: #FFF;
-      border: 2px solid #E8D5C4;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(139, 69, 19, 0.06);
-    }
-    
-    .team-select:hover {
-      border-color: #D2B48C;
-      box-shadow: 0 4px 12px rgba(139, 69, 19, 0.1);
-    }
-    
-    .team-select .ant-select-selector {
-      border: none !important;
-      box-shadow: none !important;
-      background: transparent;
-      font-weight: 500;
-      color: #5D4037;
-    }
-    
-    .formules-card {
-      background: #FFFFFF;
-      border-radius: 16px;
-      border: 1px solid #F0E8DC;
-      box-shadow: 0 3px 16px rgba(139, 69, 19, 0.06);
-    }
-    
-    .formules-card .ant-card-head {
-      background: linear-gradient(135deg, #FEFCF8 0%, #F8F6F2 100%);
-      border-radius: 16px 16px 0 0;
-      border-bottom: 1px solid #E8D5C4;
-    }
-    
-    .formules-card .ant-card-head-title {
-      color: #8B4513 !important;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    .formule-item {
-      background: #FEFCF8;
-      padding: 16px;
-      border-radius: 12px;
-      border: 1px solid #F0E8DC;
-      margin-bottom: 12px;
-      transition: all 0.3s ease;
-    }
-    
-    .formule-item:hover {
-      box-shadow: 0 4px 16px rgba(139, 69, 19, 0.08);
-      transform: translateY(-2px);
-      border-color: #E8D5C4;
-      background: #FFFFFF;
-    }
-    
-    .ant-table {
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 2px 12px rgba(139, 69, 19, 0.06);
-      background: #FFFFFF;
-    }
-    
-    .ant-table-thead > tr > th {
-      background: linear-gradient(135deg, #FEFCF8 0%, #F8F6F2 100%);
-      color: #8B4513 !important;
-      font-weight: 600;
-      border-bottom: 1px solid #E8D5C4;
-    }
-    
-    .ant-table-tbody > tr > td {
-      border-bottom: 1px solid #F5F5F5;
-      background: #FFFFFF;
-    }
-    
-    .ant-table-tbody > tr:hover > td {
-      background: #FEFCF8 !important;
-    }
-    
-    .custom-modal .ant-modal-header {
-      background: linear-gradient(135deg, #F5E6D3 0%, #E8D5C4 100%);
-      border-radius: 8px 8px 0 0;
-    }
-    
-    .custom-modal .ant-modal-title {
-      color: #8B4513 !important;
-      font-weight: 600;
-    }
-    
-    .custom-modal .ant-form-item-label > label {
-      color: #5D4037;
-      font-weight: 600;
-    }
-    
-    .custom-modal .ant-input-number,
-    .custom-modal .ant-select-selector {
-      border: 2px solid #F0E8DC;
-      border-radius: 8px;
-      background: #FEFCF8;
-    }
-    
-    .custom-modal .ant-input-number:hover,
-    .custom-modal .ant-select:hover .ant-select-selector {
-      border-color: #E8D5C4;
-      background: #FFFFFF;
-    }
-    
-    .custom-modal .ant-input-number:focus,
-    .custom-modal .ant-select-focused .ant-select-selector {
-      border-color: #D2B48C !important;
-      box-shadow: 0 0 0 2px rgba(210, 180, 140, 0.2) !important;
-      background: #FFFFFF;
-    }
-    
-    .no-rules-message {
-      text-align: center;
-      padding: 40px;
-      background: #FEFCF8;
-      border-radius: 12px;
-      border: 2px dashed #E8D5C4;
-      color: #A0826D;
-      font-size: 16px;
-      font-weight: 500;
-    }
-  `;
+  }
+
+  const getSelectedFormule = () => {
+    return formules.find(f => f.id === Number(formData.formule_defaut))
+  }
+  
 
   return (
-    <>
-      <style>{customStyles}</style>
-      <div className="team-rules-container">
-        <Row gutter={[24, 24]}>
-          <Col span={24}>
-            <Card
-              className="main-card"
-              title={
-                <Space>
-                  <SettingOutlined />
-                  Configuration des règles de congé
-                </Space>
-              }
-              loading={loading}
-              extra={
-                <Button
-                  type="primary"
-                  icon={<EditOutlined />}
-                  onClick={() => setIsModalVisible(true)}
-                  disabled={!selectedEquipe}
-                  size="large"
-                >
-                  Modifier les règles
-                </Button>
-              }
+    <div className="min-h-screen bg-gradient-to-br from-brown-50 to-amber-50 p-6">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header Section */}
+        <div className="bg-white rounded-2xl shadow-lg border border-brown-200 p-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-brown-600 rounded-xl">
+                <Settings className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-brown-900">Configuration des règles de congé</h1>
+                <p className="text-brown-600 mt-1">Gérez les paramètres de calcul des congés pour vos équipes</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsModalVisible(true)}
+              disabled={!selectedEquipe || loading}
+              className="flex items-center space-x-2 px-6 py-3 bg-brown-600 text-white rounded-xl hover:bg-brown-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
             >
-              <Space direction="vertical" size="large" style={{ width: '100%' }}>
-                <div>
-                  <Text strong style={{ color: '#5D4037', marginBottom: '8px', display: 'block' }}>
-                    Sélectionner une équipe
-                  </Text>
-                  <Select
-                    className="team-select"
-                    style={{ width: '100%', maxWidth: 400 }}
-                    value={selectedEquipe}
-                    onChange={setSelectedEquipe}
-                    placeholder="Choisissez une équipe à configurer"
-                    size="large"
-                  >
-                    {equipes.map(equipe => (
-                      <Option key={equipe.id} value={equipe.id}>
-                        {equipe.nom}
-                      </Option>
-                    ))}
-                  </Select>
+              <Edit className="w-5 h-5" />
+              <span className="font-semibold">Modifier les règles</span>
+            </button>
+          </div>
+
+          {/* Team Selection */}
+          <div className="mb-8">
+            <label className="block text-sm font-semibold text-brown-800 mb-3">Sélectionner une équipe</label>
+            <div className="relative max-w-md">
+              <select
+                value={selectedEquipe || ""}
+                onChange={(e) => setSelectedEquipe(Number(e.target.value))}
+                className="w-full px-4 py-3 border border-brown-200 rounded-xl focus:ring-2 focus:ring-brown-500 focus:border-brown-500 bg-white appearance-none pr-10"
+              >
+                <option value="">Choisissez une équipe à configurer</option>
+                {equipes.map(equipe => (
+                  <option key={equipe.id} value={equipe.id}>
+                    {equipe.nom}
+                  </option>
+                ))}
+              </select>
+              <Users className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-brown-400 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl flex items-start space-x-3">
+              <AlertCircle className="w-6 h-6 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="font-semibold mb-1">Erreur d'accès</h4>
+                <p className="text-sm">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Rules Display */}
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brown-600"></div>
+              <span className="ml-3 text-brown-600 font-medium">Chargement...</span>
+            </div>
+          ) : regleEquipe ? (
+            <div className="bg-brown-50 rounded-xl p-6 border border-brown-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-white rounded-lg p-4 border border-brown-200">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <Calculator className="w-5 h-5 text-brown-600" />
+                    <span className="font-semibold text-brown-800">Formule</span>
+                  </div>
+                  <p className="text-brown-900 font-medium">
+                    {typeof regleEquipe.formule_defaut === "object" ? regleEquipe.formule_defaut?.nom_formule : "—"}
+                  </p>
                 </div>
 
-                {regleEquipe ? (
-                  <Table
-                    columns={columns}
-                    dataSource={[regleEquipe]}
-                    rowKey="id"
-                    pagination={false}
-                    size="large"
-                  />
-                ) : (
-                  <div className="no-rules-message">
-                    <SettingOutlined style={{ fontSize: '32px', marginBottom: '16px', display: 'block' }} />
-                    Aucune règle définie pour cette équipe
-                    <br />
-                    <Text type="secondary">Cliquez sur "Modifier les règles" pour commencer la configuration</Text>
+                <div className="bg-white rounded-lg p-4 border border-brown-200">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <Calendar className="w-5 h-5 text-brown-600" />
+                    <span className="font-semibold text-brown-800">Jours ouvrables</span>
+                  </div>
+                  <p className="text-2xl font-bold text-brown-900">{regleEquipe.jours_ouvrables_annuels}</p>
+                  <p className="text-sm text-brown-600">jours/an</p>
+                </div>
+
+                <div className="bg-white rounded-lg p-4 border border-brown-200">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <AlertCircle className="w-5 h-5 text-brown-600" />
+                    <span className="font-semibold text-brown-800">Jours négatifs max</span>
+                  </div>
+                  <p className="text-2xl font-bold text-brown-900">{regleEquipe.nbr_max_negatif}</p>
+                  <p className="text-sm text-brown-600">jours</p>
+                </div>
+
+                <div className="bg-white rounded-lg p-4 border border-brown-200">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <CheckCircle2 className="w-5 h-5 text-brown-600" />
+                    <span className="font-semibold text-brown-800">Jours acquis</span>
+                  </div>
+                  <p className="text-2xl font-bold text-brown-900">{regleEquipe.jours_acquis_annuels}</p>
+                  <p className="text-sm text-brown-600">jours/an</p>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-brown-200">
+                <p className="text-sm text-brown-600">
+                  <Clock className="w-4 h-4 inline mr-1" />
+                  Dernière mise à jour : {formatDate(regleEquipe.date_mise_a_jour)}
+                </p>
+              </div>
+            </div>
+          ) : selectedEquipe ? (
+            <div className="text-center py-12 bg-brown-50 rounded-xl border-2 border-dashed border-brown-300">
+              <Settings className="w-16 h-16 text-brown-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-brown-800 mb-2">Aucune règle définie</h3>
+              <p className="text-brown-600">Cliquez sur "Modifier les règles" pour commencer la configuration</p>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Available Formulas */}
+        <div className="bg-white rounded-2xl shadow-lg border border-brown-200 p-8">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="p-2 bg-brown-100 rounded-lg">
+              <BookOpen className="w-6 h-6 text-brown-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-brown-900">Formules disponibles</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {formules.map(formule => (
+              <div
+                key={formule.id}
+                className="bg-brown-50 rounded-lg p-6 border border-brown-200 hover:border-brown-400 transition-colors duration-200"
+              >
+                <h3 className="font-semibold text-brown-800 mb-3">{formule.nom_formule}</h3>
+                <div className="bg-white rounded-md p-3 border border-brown-200">
+                  <div className="space-y-1">
+                    {Object.entries(formule.expressions).map(([cle, valeur]) => (
+                      <div key={cle} className="mb-1">
+                        <span className="font-medium text-brown-800">{cle}</span>:{" "}
+                        <code className="text-sm text-brown-700 font-mono">{valeur}</code>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Modal */}
+      {isModalVisible && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="bg-brown-600 px-8 py-6 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Edit className="w-6 h-6 text-white" />
+                  <h3 className="text-xl font-bold text-white">Modifier les règles de congé</h3>
+                </div>
+                <button
+                  onClick={() => setIsModalVisible(false)}
+                  className="p-2 hover:bg-brown-700 rounded-full transition-colors duration-200"
+                >
+                  <X className="w-5 h-5 text-white" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-8 space-y-6">
+              {/* Formule Selection */}
+              <div>
+                <label className="block text-sm font-semibold text-brown-800 mb-2">Formule de calcul *</label>
+                <select
+                  value={formData.formule_defaut}
+                  onChange={(e) => handleFormChange("formule_defaut", e.target.value)}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-brown-500 focus:border-brown-500 ${
+                    formErrors.formule_defaut ? "border-red-300" : "border-brown-200"
+                  }`}
+                >
+                  <option value="">Sélectionner une formule</option>
+                  {formules.map(formule => (
+                    <option key={formule.id} value={formule.id}>
+                      {formule.nom_formule}
+                    </option>
+                  ))}
+                </select>
+                {formErrors.formule_defaut && <p className="text-red-500 text-sm mt-1">{formErrors.formule_defaut}</p>}
+                {getSelectedFormule() && (
+                  <div className="mt-2 p-3 bg-brown-50 rounded-lg border border-brown-200">
+                    {getSelectedFormule()?.expressions &&
+                      Object.entries(getSelectedFormule()!.expressions).map(([nom, expr]) => (
+                        <div key={nom}>
+                          <span className="font-semibold text-brown-800">{nom}</span>:{" "}
+                          <code className="text-sm text-brown-700">{expr}</code>
+                        </div>
+                      ))}
                   </div>
                 )}
-              </Space>
-            </Card>
-          </Col>
+              </div>
 
-          <Col span={24}>
-            <Card 
-              className="formules-card"
-              title={
-                <Space>
-                  <BookOutlined style={{ color: '#8B4513' }} />
-                  Autres formules disponibles
-                </Space>
-              }
-              type="inner"
-            >
-              <Row gutter={[16, 16]}>
-                {formules.map(formule => (
-                  <Col xs={24} md={12} lg={8} key={formule.id}>
-                    <div className="formule-item">
-                      <Title level={5} style={{ color: '#8B4513', marginBottom: '8px' }}>
-                        {formule.nom_formule}
-                      </Title>
-                      <Text 
-                        code 
-                        style={{ 
-                          backgroundColor: '#FFFFFF', 
-                          padding: '8px 12px', 
-                          borderRadius: '6px',
-                          color: '#8B4513',
-                          border: '1px solid #E8D5C4',
-                          fontFamily: 'monospace',
-                          fontSize: '13px'
-                        }}
-                      >
-                        {formule.expression}
-                      </Text>
-                    </div>
-                  </Col>
-                ))}
-              </Row>
-            </Card>
-          </Col>
-        </Row>
-
-        <Modal
-          title={
-            <Space>
-              <EditOutlined />
-              Modifier les règles de congé
-            </Space>
-          }
-          open={isModalVisible}
-          onOk={handleSave}
-          onCancel={() => setIsModalVisible(false)}
-          width={700}
-          destroyOnClose
-          className="custom-modal"
-          okText="Sauvegarder"
-          cancelText="Annuler"
-          okButtonProps={{
-            style: {
-              background: 'linear-gradient(135deg, #8B4513 0%, #A0522D 100%)',
-              border: 'none',
-              borderRadius: '8px',
-              fontWeight: '600'
-            }
-          }}
-          cancelButtonProps={{
-            style: {
-              borderColor: '#D2B48C',
-              color: '#8B4513',
-              borderRadius: '8px',
-              fontWeight: '600'
-            }
-          }}
-        >
-          <Form 
-            form={form} 
-            layout="vertical" 
-            initialValues={{ jours_travailles: 230, nb_feries: 10 }}
-          >
-            <Row gutter={16}>
-              <Col span={24}>
-                <Form.Item
-                  label="Formule de calcul"
-                  name="formule_defaut"
-                  rules={[{ required: true, message: 'Ce champ est requis' }]}
-                >
-                  <Select placeholder="Sélectionner une formule" size="large">
-                    {formules.map(formule => (
-                      <Option key={formule.id} value={formule.id}>
-                        {formule.nom_formule}
-                      </Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              </Col>
-
-              <Col xs={24} md={12}>
-                <Form.Item
-                  label="Jours de congé acquis annuellement"
-                  name="jours_acquis_annuels"
-                  rules={[{ required: true, message: 'Ce champ est requis' }]}
-                >
-                  <InputNumber 
-                    min={1} 
-                    max={365} 
-                    style={{ width: '100%' }} 
-                    size="large"
+              {/* Form Fields Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-brown-800 mb-2">Jours acquis annuellement *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={formData.jours_acquis_annuels}
+                    onChange={(e) => handleFormChange("jours_acquis_annuels", Number(e.target.value))}
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-brown-500 focus:border-brown-500 ${
+                      formErrors.jours_acquis_annuels ? "border-red-300" : "border-brown-200"
+                    }`}
                     placeholder="Ex: 25"
                   />
-                </Form.Item>
-              </Col>
+                  {formErrors.jours_acquis_annuels && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.jours_acquis_annuels}</p>
+                  )}
+                </div>
 
-              <Col xs={24} md={12}>
-                <Form.Item
-                  label="Jours travaillés"
-                  name="jours_travailles"
-                  rules={[{ required: true, message: 'Ce champ est requis' }]}
-                >
-                  <InputNumber 
-                    min={0} 
-                    max={365} 
-                    style={{ width: '100%' }} 
-                    size="large"
+                <div>
+                  <label className="block text-sm font-semibold text-brown-800 mb-2">Jours travaillés *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={formData.jours_travailles}
+                    onChange={(e) => handleFormChange("jours_travailles", Number(e.target.value))}
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-brown-500 focus:border-brown-500 ${
+                      formErrors.jours_travailles ? "border-red-300" : "border-brown-200"
+                    }`}
                     placeholder="Ex: 230"
                   />
-                </Form.Item>
-              </Col>
+                  {formErrors.jours_travailles && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.jours_travailles}</p>
+                  )}
+                </div>
 
-              <Col xs={24} md={12}>
-                <Form.Item
-                  label="Nombre de jours fériés"
-                  name="nb_feries"
-                  rules={[{ required: true, message: 'Ce champ est requis' }]}
-                >
-                  <InputNumber 
-                    min={0} 
-                    max={50} 
-                    style={{ width: '100%' }} 
-                    size="large"
+                <div>
+                  <label className="block text-sm font-semibold text-brown-800 mb-2">Jours fériés</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="50"
+                    value={formData.nb_feries}
+                    onChange={(e) => handleFormChange("nb_feries", Number(e.target.value))}
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-brown-500 focus:border-brown-500 ${
+                      formErrors.nb_feries ? "border-red-300" : "border-brown-200"
+                    }`}
                     placeholder="Ex: 10"
                   />
-                </Form.Item>
-              </Col>
+                  {formErrors.nb_feries && <p className="text-red-500 text-sm mt-1">{formErrors.nb_feries}</p>}
+                </div>
 
+                <div>
+                  <label className="block text-sm font-semibold text-brown-800 mb-2">
+                    Jours négatifs maximum autorisés
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="30"
+                    value={formData.nbr_max_negatif}
+                    onChange={(e) => handleFormChange("nbr_max_negatif", Number(e.target.value))}
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-brown-500 focus:border-brown-500 ${
+                      formErrors.nbr_max_negatif ? "border-red-300" : "border-brown-200"
+                    }`}
+                    placeholder="Ex: 10"
+                  />
+                  {formErrors.nbr_max_negatif && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.nbr_max_negatif}</p>
+                  )}
+                  <p className="text-xs text-brown-500 mt-1">
+                    Nombre maximum de jours de congé pouvant être négatifs (0 pour désactiver)
+                  </p>
+                </div>
+              </div>
+
+              {/* Current Values Display */}
               {regleEquipe && (
-                <>
-                  <Col xs={24} md={12}>
-                    <Form.Item label="Jours ouvrables annuels (calculé)">
-                      <InputNumber
-                        value={regleEquipe.jours_ouvrables_annuels}
-                        disabled
-                        style={{ width: '100%' }}
-                        size="large"
-                      />
-                    </Form.Item>
-                  </Col>
-
-                  <Col span={24}>
-                    <Form.Item label="Jours de congés acquis (calculés)">
-                      <InputNumber
-                        value={regleEquipe.jours_conges_acquis}
-                        disabled
-                        style={{ width: '100%' }}
-                        size="large"
-                      />
-                    </Form.Item>
-                  </Col>
-                </>
+                <div className="bg-brown-50 rounded-xl p-4 border border-brown-200">
+                  <h4 className="font-semibold text-brown-800 mb-3">Valeurs actuelles calculées</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-brown-600">Jours ouvrables annuels:</span>
+                      <span className="ml-2 font-semibold text-brown-900">{regleEquipe.jours_ouvrables_annuels}</span>
+                    </div>
+                    <div>
+                      <span className="text-brown-600">Jours négatifs max:</span>
+                      <span className="ml-2 font-semibold text-brown-900">{regleEquipe.nbr_max_negatif}</span>
+                    </div>
+                  </div>
+                </div>
               )}
-            </Row>
-          </Form>
-        </Modal>
-      </div>
-    </>
-  );
-};
+            </div>
 
-export default TeamRulesConfig;
+            {/* Modal Footer */}
+            <div className="flex justify-end space-x-3 px-8 py-6 border-t border-brown-200">
+              <button
+                onClick={() => setIsModalVisible(false)}
+                className="px-6 py-3 border border-brown-300 text-brown-700 rounded-xl hover:bg-brown-50 transition-colors duration-200"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={loading}
+                className="px-6 py-3 bg-brown-600 text-white rounded-xl hover:bg-brown-700 disabled:opacity-50 transition-colors duration-200 flex items-center space-x-2"
+              >
+                {loading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>}
+                <span>{loading ? "Sauvegarde..." : "Sauvegarder"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default TeamRulesConfig

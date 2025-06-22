@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import  { useState } from 'react';
+
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Mail, Key, Lock, Eye, EyeOff, CheckCircle, Loader2, ArrowLeft } from 'lucide-react';
-
+import { resetPasswordConfirmApi } from '../../services/api'; 
 export default function ResetPasswordConfirm() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -20,19 +21,14 @@ export default function ResetPasswordConfirm() {
     setError('');
     setLoading(true);
 
-    const res = await fetch('http://localhost:8000/auth/password-reset-confirm/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, reset_token: resetToken, new_password: newPassword }),
-    });
-    const data = await res.json();
+    const result = await resetPasswordConfirmApi(email, resetToken, newPassword);
     setLoading(false);
 
-    if (res.ok) {
-      setMessage('Mot de passe réinitialisé ! Vous pouvez vous connecter.');
+    if (result.success) {
+      setMessage(result.message || 'Mot de passe réinitialisé !');
       setTimeout(() => navigate('/login'), 1200);
     } else {
-      setError(data.error || "Erreur lors de la réinitialisation.");
+      setError(result.error || 'Erreur lors de la réinitialisation.');
     }
   };
 

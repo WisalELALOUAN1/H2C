@@ -1,5 +1,6 @@
 // LoginForm.tsx
-import React, { useState } from 'react';
+import  { useState } from 'react';
+import * as React from 'react';
 import { LogIn, Loader2, Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';

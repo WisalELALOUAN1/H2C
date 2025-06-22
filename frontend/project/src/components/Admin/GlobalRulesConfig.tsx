@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { Country, CountryHolidays, GlobalRules, WorkDay } from "../../types";
-import HolidayCalendar from "./HolidayCalendar";
-import { Settings, Calendar, Clock, Save, Edit3, X, Check, Loader2 } from "lucide-react";
-import dayjs from "dayjs";
-import "dayjs/locale/fr";
+"use client"
 
-dayjs.locale('fr');
+import * as React from 'react';
+import { useState, useEffect, useCallback } from "react"
+import type { Country, CountryHolidays, GlobalRules, WorkDay } from "../../types"
+import HolidayCalendar from "./HolidayCalendar"
+import { Settings, Calendar, Clock, Save, Edit3, X, Check, Loader2 } from "lucide-react"
+import dayjs from "dayjs"
+import "dayjs/locale/fr"
+import { fetchGlobalRulesApi, saveGlobalRulesApi, fetchHolidaysApi } from "../../services/api"
 
-const API_URL = "http://localhost:8000/gestion-absences-conges/regles-globaux/";
-const HOLIDAYS_API_URL = "http://localhost:8000/gestion-absences-conges/holidays/";
+dayjs.locale("fr")
 
 const WORK_DAYS: WorkDay[] = [
   { key: "lundi", label: "Lundi" },
@@ -17,206 +18,181 @@ const WORK_DAYS: WorkDay[] = [
   { key: "jeudi", label: "Jeudi" },
   { key: "vendredi", label: "Vendredi" },
   { key: "samedi", label: "Samedi" },
-  { key: "dimanche", label: "Dimanche" }
-];
+  { key: "dimanche", label: "Dimanche" },
+]
 
 interface HolidayCalendarHoliday {
-  id: string;
-  date: string;
-  name: string;
-  fixed: boolean;
-  custom?: boolean;
+  id: string
+  date: string
+  name: string
+  fixed: boolean
+  custom?: boolean
 }
 
 const COUNTRIES: Country[] = [
-  { code: 'MA', name: 'Maroc' },
-  { code: 'DZ', name: 'Algérie' },
-  { code: 'TN', name: 'Tunisie' },
-  { code: 'FR', name: 'France' },
-  { code: 'BE', name: 'Belgique' },
-  { code: 'CH', name: 'Suisse' },
-  { code: 'DE', name: 'Allemagne' },
-  { code: 'ES', name: 'Espagne' },
-  { code: 'IT', name: 'Italie' },
-  { code: 'GB', name: 'Royaume-Uni' },
-  { code: 'US', name: 'États-Unis' },
-  { code: 'CA', name: 'Canada' }
-];
+  { code: "MA", name: "Maroc" },
+  { code: "DZ", name: "Algérie" },
+  { code: "TN", name: "Tunisie" },
+  { code: "FR", name: "France" },
+  { code: "BE", name: "Belgique" },
+  { code: "CH", name: "Suisse" },
+  { code: "DE", name: "Allemagne" },
+  { code: "ES", name: "Espagne" },
+  { code: "IT", name: "Italie" },
+  { code: "GB", name: "Royaume-Uni" },
+  { code: "US", name: "États-Unis" },
+  { code: "CA", name: "Canada" },
+]
 
 const DEFAULT_RULES: GlobalRules = {
-  jours_ouvrables: ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'],
+  jours_ouvrables: ["lundi", "mardi", "mercredi", "jeudi", "vendredi"],
   jours_feries: [],
-  pays_feries: 'FR',
+  pays_feries: "FR",
   heure_debut_travail: "09:00",
   heure_fin_travail: "17:00",
   pause_midi_debut: "12:00",
-  pause_midi_fin: "13:30"
-};
+  pause_midi_fin: "13:30",
+}
 
 const GlobalRulesConfig: React.FC = () => {
-  const [rules, setRules] = useState<GlobalRules>(DEFAULT_RULES);
-  const [originalRules, setOriginalRules] = useState<GlobalRules>(DEFAULT_RULES);
-  const [editMode, setEditMode] = useState(false);
-  const [status, setStatus] = useState({ success: '', error: '' });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [fetchingHolidays, setFetchingHolidays] = useState(false);
+  const [rules, setRules] = useState<GlobalRules>(DEFAULT_RULES)
+  const [originalRules, setOriginalRules] = useState<GlobalRules>(DEFAULT_RULES)
+  const [editMode, setEditMode] = useState(false)
+  const [status, setStatus] = useState({ success: "", error: "" })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [fetchingHolidays, setFetchingHolidays] = useState(false)
 
   const hasChanges = useCallback(() => {
-    return JSON.stringify(rules) !== JSON.stringify(originalRules);
-  }, [rules, originalRules]);
+    return JSON.stringify(rules) !== JSON.stringify(originalRules)
+  }, [rules, originalRules])
 
   const loadRules = useCallback(async () => {
     try {
-      setStatus({ success: '', error: '' });
-      setLoading(true);
-      
-      const token = localStorage.getItem("accessToken");
-      const response = await fetch(API_URL, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (!response.ok) throw new Error("Échec du chargement des règles");
-      
-      const data = await response.json();
-      setRules(data);
-      setOriginalRules(data);
+      setStatus({ success: "", error: "" })
+      setLoading(true)
+
+      const data = await fetchGlobalRulesApi()
+      setRules(data)
+      setOriginalRules(data)
     } catch (error) {
-      setStatus(prev => ({ ...prev, error: error instanceof Error ? error.message : String(error) }));
+      setStatus((prev) => ({ ...prev, error: error instanceof Error ? error.message : String(error) }))
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    loadRules();
-  }, [loadRules]);
+    loadRules()
+  }, [loadRules])
 
   const transformHolidays = (holidays: any[]): CountryHolidays[] => {
-    return holidays.map(holiday => ({
+    return holidays.map((holiday) => ({
       date: holiday.date,
       name: holiday.name,
-      fixed: true
-    }));
-  };
+      fixed: true,
+    }))
+  }
 
   const fetchHolidays = useCallback(async (countryCode: string) => {
     try {
-      setFetchingHolidays(true);
-      setStatus({ success: '', error: '' });
-      
-      const token = localStorage.getItem("accessToken");
-      const response = await fetch(`${HOLIDAYS_API_URL}?country=${countryCode}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (!response.ok) throw new Error("Échec de récupération des jours fériés");
-      
-      const holidays = await response.json();
-      
-      setRules(prev => ({
+      setFetchingHolidays(true)
+      setStatus({ success: "", error: "" })
+
+      const holidays = await fetchHolidaysApi(countryCode)
+
+      setRules((prev) => ({
         ...prev,
         jours_feries: transformHolidays(holidays),
-        pays_feries: countryCode
-      }));
+        pays_feries: countryCode,
+      }))
     } catch (error) {
-      setStatus(prev => ({ ...prev, error: error instanceof Error ? error.message : String(error) }));
+      setStatus((prev) => ({ ...prev, error: error instanceof Error ? error.message : String(error) }))
     } finally {
-      setFetchingHolidays(false);
+      setFetchingHolidays(false)
     }
-  }, []);
+  }, [])
 
-  const handleCountryChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const countryCode = e.target.value;
-    if (countryCode) {
-      fetchHolidays(countryCode);
-    } else {
-      setRules(prev => ({
-        ...prev,
-        jours_feries: [],
-        pays_feries: null
-      }));
-    }
-  }, [fetchHolidays]);
+  const handleCountryChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const countryCode = e.target.value
+      if (countryCode) {
+        fetchHolidays(countryCode)
+      } else {
+        setRules((prev) => ({
+          ...prev,
+          jours_feries: [],
+          pays_feries: null,
+        }))
+      }
+    },
+    [fetchHolidays],
+  )
 
   const handleWorkDayToggle = useCallback((dayKey: string, checked: boolean) => {
-    setRules(prev => ({
+    setRules((prev) => ({
       ...prev,
       jours_ouvrables: checked
         ? [...prev.jours_ouvrables, dayKey]
-        : prev.jours_ouvrables.filter(day => day !== dayKey)
-    }));
-  }, []);
+        : prev.jours_ouvrables.filter((day) => day !== dayKey),
+    }))
+  }, [])
 
   const handleTimeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setRules(prev => ({ ...prev, [name]: value }));
-  }, []);
+    const { name, value } = e.target
+    setRules((prev) => ({ ...prev, [name]: value }))
+  }, [])
 
   const handleHolidaysChange = useCallback((holidays: HolidayCalendarHoliday[]) => {
-    setRules(prev => ({
+    setRules((prev) => ({
       ...prev,
-      jours_feries: holidays.map(h => ({
+      jours_feries: holidays.map((h) => ({
         date: h.date,
         name: h.name,
-        fixed: h.fixed
-      }))
-    }));
-  }, []);
+        fixed: h.fixed,
+      })),
+    }))
+  }, [])
 
-  const handleSave = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!hasChanges()) {
-      setStatus({ success: '', error: 'Aucune modification à enregistrer' });
-      return;
-    }
-    
-    if (saving) return;
-    
-    setStatus({ success: '', error: '' });
-    setSaving(true);
-    
-    try {
-      const token = localStorage.getItem("accessToken");
-      const method = rules.id ? "PUT" : "POST";
-      
-      const response = await fetch(API_URL, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(rules)
-      });
-      
-      if (!response.ok) {
-        throw new Error(response.statusText || "Échec de la sauvegarde");
+  const handleSave = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault()
+
+      if (!hasChanges()) {
+        setStatus({ success: "", error: "Aucune modification à enregistrer" })
+        return
       }
-      
-      const savedData = await response.json();
-      
-      setRules(savedData);
-      setOriginalRules(savedData);
-      setStatus({ success: "Configuration enregistrée avec succès", error: '' });
-      setEditMode(false);
-      
-    } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error);
-      setStatus(prev => ({ 
-        ...prev, 
-        error: error instanceof Error ? error.message : "Une erreur est survenue" 
-      }));
-    } finally {
-      setSaving(false);
-    }
-  }, [rules, saving, hasChanges]);
+
+      if (saving) return
+
+      setStatus({ success: "", error: "" })
+      setSaving(true)
+
+      try {
+        const savedData = await saveGlobalRulesApi(rules)
+
+        setRules(savedData)
+        setOriginalRules(savedData)
+        setStatus({ success: "Configuration enregistrée avec succès", error: "" })
+        setEditMode(false)
+      } catch (error) {
+        console.error("Erreur lors de la sauvegarde:", error)
+        setStatus((prev) => ({
+          ...prev,
+          error: error instanceof Error ? error.message : "Une erreur est survenue",
+        }))
+      } finally {
+        setSaving(false)
+      }
+    },
+    [rules, saving, hasChanges],
+  )
 
   const handleCancel = useCallback(() => {
-    setEditMode(false);
-    setStatus({ success: '', error: '' });
-    setRules(originalRules);
-  }, [originalRules]);
+    setEditMode(false)
+    setStatus({ success: "", error: "" })
+    setRules(originalRules)
+  }, [originalRules])
 
   if (loading) {
     return (
@@ -244,7 +220,7 @@ const GlobalRulesConfig: React.FC = () => {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -269,7 +245,7 @@ const GlobalRulesConfig: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {status.success && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start">
           <div className="flex-shrink-0">
@@ -287,18 +263,19 @@ const GlobalRulesConfig: React.FC = () => {
             <Calendar className="w-6 h-6 text-blue-600 mr-3" />
             Jours de travail
             <span className="ml-2 text-sm font-normal text-gray-500">
-              ({rules.jours_ouvrables.length} jour{rules.jours_ouvrables.length > 1 ? 's' : ''} sélectionné{rules.jours_ouvrables.length > 1 ? 's' : ''})
+              ({rules.jours_ouvrables.length} jour{rules.jours_ouvrables.length > 1 ? "s" : ""} sélectionné
+              {rules.jours_ouvrables.length > 1 ? "s" : ""})
             </span>
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-            {WORK_DAYS.map(day => (
-              <label 
+            {WORK_DAYS.map((day) => (
+              <label
                 key={day.key}
                 className={`group flex flex-col items-center p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 transform hover:scale-105 ${
                   rules.jours_ouvrables.includes(day.key)
-                    ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md'
-                    : 'border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50'
-                } ${!editMode && 'opacity-75 cursor-default hover:scale-100'}`}
+                    ? "border-blue-500 bg-blue-50 text-blue-700 shadow-md"
+                    : "border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50"
+                } ${!editMode && "opacity-75 cursor-default hover:scale-100"}`}
               >
                 <input
                   type="checkbox"
@@ -308,9 +285,7 @@ const GlobalRulesConfig: React.FC = () => {
                   className="hidden"
                 />
                 <span className="font-medium text-sm">{day.label}</span>
-                {rules.jours_ouvrables.includes(day.key) && (
-                  <Check className="w-4 h-4 mt-2 text-blue-500" />
-                )}
+                {rules.jours_ouvrables.includes(day.key) && <Check className="w-4 h-4 mt-2 text-blue-500" />}
               </label>
             ))}
           </div>
@@ -321,10 +296,11 @@ const GlobalRulesConfig: React.FC = () => {
             <Calendar className="w-6 h-6 text-green-600 mr-3" />
             Jours fériés
             <span className="ml-2 text-sm font-normal text-gray-500">
-              ({rules.jours_feries.length} jour{rules.jours_feries.length > 1 ? 's' : ''} férié{rules.jours_feries.length > 1 ? 's' : ''})
+              ({rules.jours_feries.length} jour{rules.jours_feries.length > 1 ? "s" : ""} férié
+              {rules.jours_feries.length > 1 ? "s" : ""})
             </span>
           </h2>
-          
+
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Pays</label>
@@ -333,25 +309,33 @@ const GlobalRulesConfig: React.FC = () => {
                 onChange={handleCountryChange}
                 disabled={!editMode || fetchingHolidays}
                 className={`w-full p-3 border rounded-lg ${
-                  editMode 
-                    ? 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500' 
-                    : 'border-gray-200 bg-gray-50'
-                } ${fetchingHolidays ? 'opacity-50' : ''}`}
+                  editMode
+                    ? "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    : "border-gray-200 bg-gray-50"
+                } ${fetchingHolidays ? "opacity-50" : ""}`}
               >
                 <option value="">Sélectionnez un pays</option>
                 <optgroup label="Afrique du Nord">
-                  {COUNTRIES.filter(c => ['MA', 'DZ', 'TN'].includes(c.code)).map(country => (
-                    <option key={country.code} value={country.code}>{country.name}</option>
+                  {COUNTRIES.filter((c) => ["MA", "DZ", "TN"].includes(c.code)).map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.name}
+                    </option>
                   ))}
                 </optgroup>
                 <optgroup label="Europe">
-                  {COUNTRIES.filter(c => ['FR', 'BE', 'CH', 'DE', 'ES', 'IT', 'GB'].includes(c.code)).map(country => (
-                    <option key={country.code} value={country.code}>{country.name}</option>
-                  ))}
+                  {COUNTRIES.filter((c) => ["FR", "BE", "CH", "DE", "ES", "IT", "GB"].includes(c.code)).map(
+                    (country) => (
+                      <option key={country.code} value={country.code}>
+                        {country.name}
+                      </option>
+                    ),
+                  )}
                 </optgroup>
                 <optgroup label="Amérique">
-                  {COUNTRIES.filter(c => ['US', 'CA'].includes(c.code)).map(country => (
-                    <option key={country.code} value={country.code}>{country.name}</option>
+                  {COUNTRIES.filter((c) => ["US", "CA"].includes(c.code)).map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.name}
+                    </option>
                   ))}
                 </optgroup>
               </select>
@@ -365,12 +349,12 @@ const GlobalRulesConfig: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <HolidayCalendar 
+              <HolidayCalendar
                 holidays={rules.jours_feries.map((h, idx) => ({
                   id: idx.toString(),
                   date: h.date,
                   name: h.name,
-                  fixed: h.fixed
+                  fixed: h.fixed,
                 }))}
                 onHolidaysChange={handleHolidaysChange}
                 editable={editMode}
@@ -385,7 +369,7 @@ const GlobalRulesConfig: React.FC = () => {
             <Clock className="w-6 h-6 text-purple-600 mr-3" />
             Horaires de travail
           </h2>
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-6">
               <h3 className="text-lg font-medium text-gray-800 flex items-center">
@@ -402,9 +386,9 @@ const GlobalRulesConfig: React.FC = () => {
                     onChange={handleTimeChange}
                     disabled={!editMode}
                     className={`w-full p-3 border rounded-lg ${
-                      editMode 
-                        ? 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500' 
-                        : 'border-gray-200 bg-gray-50'
+                      editMode
+                        ? "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        : "border-gray-200 bg-gray-50"
                     }`}
                   />
                 </div>
@@ -417,15 +401,15 @@ const GlobalRulesConfig: React.FC = () => {
                     onChange={handleTimeChange}
                     disabled={!editMode}
                     className={`w-full p-3 border rounded-lg ${
-                      editMode 
-                        ? 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500' 
-                        : 'border-gray-200 bg-gray-50'
+                      editMode
+                        ? "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        : "border-gray-200 bg-gray-50"
                     }`}
                   />
                 </div>
               </div>
             </div>
-            
+
             <div className="space-y-6">
               <h3 className="text-lg font-medium text-gray-800 flex items-center">
                 <div className="w-3 h-3 bg-orange-500 rounded-full mr-2"></div>
@@ -441,9 +425,9 @@ const GlobalRulesConfig: React.FC = () => {
                     onChange={handleTimeChange}
                     disabled={!editMode}
                     className={`w-full p-3 border rounded-lg ${
-                      editMode 
-                        ? 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500' 
-                        : 'border-gray-200 bg-gray-50'
+                      editMode
+                        ? "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        : "border-gray-200 bg-gray-50"
                     }`}
                   />
                 </div>
@@ -456,9 +440,9 @@ const GlobalRulesConfig: React.FC = () => {
                     onChange={handleTimeChange}
                     disabled={!editMode}
                     className={`w-full p-3 border rounded-lg ${
-                      editMode 
-                        ? 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500' 
-                        : 'border-gray-200 bg-gray-50'
+                      editMode
+                        ? "border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        : "border-gray-200 bg-gray-50"
                     }`}
                   />
                 </div>
@@ -483,7 +467,7 @@ const GlobalRulesConfig: React.FC = () => {
                 type="submit"
                 disabled={saving || !hasChanges()}
                 className={`flex items-center px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-200 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${
-                  !hasChanges() ? 'from-gray-400 to-gray-500 hover:from-gray-400 hover:to-gray-500' : ''
+                  !hasChanges() ? "from-gray-400 to-gray-500 hover:from-gray-400 hover:to-gray-500" : ""
                 }`}
               >
                 {saving ? (
@@ -494,7 +478,7 @@ const GlobalRulesConfig: React.FC = () => {
                 ) : (
                   <>
                     <Save className="w-5 h-5 mr-2" />
-                    Enregistrer {hasChanges() ? '(Modifications détectées)' : '(Aucune modification)'}
+                    Enregistrer {hasChanges() ? "(Modifications détectées)" : "(Aucune modification)"}
                   </>
                 )}
               </button>
@@ -512,7 +496,7 @@ const GlobalRulesConfig: React.FC = () => {
         </div>
       </form>
     </div>
-  );
-};
+  )
+}
 
-export default GlobalRulesConfig;
+export default GlobalRulesConfig
