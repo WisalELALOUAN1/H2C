@@ -28,11 +28,16 @@ import holidays
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from datetime import datetime, date
-import json
-import requests
 import calendar
 from rest_framework import permissions
-import math
+from datetime import datetime, date, timedelta
+import logging
+from rest_framework.views import APIView
+from rest_framework import permissions, status
+from rest_framework.response import Response
+from django.db.models import Q
+
+import traceback
 from .serializers import calculer_conges_acquis
 class ReglesGlobauxRetrieveUpdateView(generics.RetrieveUpdateAPIView):
     queryset = ReglesGlobaux.objects.all()
@@ -403,6 +408,8 @@ class RegleCongeViewSet(viewsets.ModelViewSet):
         nb_feries = len(regles.jours_feries or [])
         return (52 * nb_jours_hebdo) - nb_feries - jours_acquis_annuels
 
+
+
     def perform_create(self, serializer):
         equipe_id = self.request.data.get('equipe')
         equipe = get_object_or_404(Equipe, id=equipe_id, manager=self.request.user)
@@ -476,84 +483,146 @@ def calculer_jours_par_formule(formule: Formule, context: dict):
     return resultats
 
 
+
+
+logger = logging.getLogger(__name__)
+
 class CalendarDataView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
-        year = int(request.GET.get('year', datetime.now().year))
-        month = int(request.GET.get('month', datetime.now().month))
-        
-        # Calculer les dates de début et fin du mois
-        start_date = date(year, month, 1)
-        last_day = calendar.monthrange(year, month)[1]
-        end_date = date(year, month, last_day)
-        
-        # Récupérer les congés de l'utilisateur pour ce mois
-        user_leaves = DemandeConge.objects.filter(
-            user=request.user,
-            date_debut__lte=end_date,
-            date_fin__gte=start_date
-        ).order_by('date_debut')
-        
-        # Récupérer les jours fériés
-        holidays = self.get_holidays(year, month)
-        print(f"Jours fériés pour {year}-{month}: {holidays}")
-        # Formater les données
-        calendar_data = {
-            'holidays': holidays,
-            'leaves': [],
-            'pendingLeaves': []
-        }
-        
-        # Traiter les congés
-        for leave in user_leaves:
-            # Générer toutes les dates entre date_debut et date_fin
-            current_date = leave.date_debut
-            while current_date <= leave.date_fin:
-                # Vérifier si la date est dans le mois demandé
-                if start_date <= current_date <= end_date:
+        try:
+            # 1. Valider les paramètres de requête
+            year = int(request.GET.get('year', datetime.now().year))
+            month = int(request.GET.get('month', datetime.now().month))
+            
+            if not (1 <= month <= 12):
+                raise ValueError("Le mois doit être entre 1 et 12")
+            
+            # 2. Calculer la période
+            start_date = date(year, month, 1)
+            last_day = calendar.monthrange(year, month)[1]
+            end_date = date(year, month, last_day)
+            
+            logger.info(f"Fetching calendar data for user {request.user.id} - {year}-{month}")
+
+            # 3. Récupérer les congés de l'utilisateur
+            user_leaves = DemandeConge.objects.filter(
+                user=request.user,
+                date_debut__lte=end_date,
+                date_fin__gte=start_date
+            ).select_related('user').order_by('date_debut')
+
+            # 4. Récupérer les congés de l'équipe (méthode optimisée)
+            team_leaves = DemandeConge.objects.none()  # Par défaut vide
+            
+            # Vérifier d'abord si l'utilisateur appartient à des équipes
+            user_teams = request.user.equipes_membre.all()
+            if user_teams.exists():
+                team_members = Utilisateur.objects.filter(
+                    equipes_membre__in=user_teams
+                ).exclude(id=request.user.id).distinct()
+
+                team_leaves = DemandeConge.objects.filter(
+                    Q(user__in=team_members),
+                    Q(date_debut__lte=end_date),
+                    Q(date_fin__gte=start_date)
+                ).select_related('user').order_by('date_debut')
+
+            logger.info(f"Found {user_leaves.count()} user leaves and {team_leaves.count()} team leaves")
+
+            # 5. Récupérer les jours fériés
+            holidays_data = self.get_holidays(year, month)
+            
+            # 6. Formater la réponse
+            def build_leave_data(leave, is_team=False):
+                leave_days = []
+                current_date = max(leave.date_debut, start_date)
+                end_date_leave = min(leave.date_fin, end_date)
+                
+                while current_date <= end_date_leave:
                     leave_data = {
                         'id': leave.id,
-                        'title': f"{leave.get_type_demande_display()}",
+                        'title': leave.get_type_demande_display(),
                         'date': current_date.isoformat(),
                         'type': 'pending_leave' if leave.status == 'en attente' else 'leave',
                         'status': leave.status,
-                        'description': leave.commentaire,
-                        'isHalfDay': leave.demi_jour
+                        'description': leave.commentaire or "",
+                        'isHalfDay': leave.demi_jour,
+                        'isTeamLeave': is_team,
                     }
                     
-                    if leave.status == 'en attente':
-                        calendar_data['pendingLeaves'].append(leave_data)
-                    else:
-                        calendar_data['leaves'].append(leave_data)
+                    if is_team:
+                        leave_data['user'] = {
+                            'id': leave.user.id,
+                            'name': f"{leave.user.prenom} {leave.user.nom}",
+                            'email': leave.user.email
+                        }
+                    
+                    leave_days.append(leave_data)
+                    current_date += timedelta(days=1)
                 
-                # Passer au jour suivant
-                current_date = current_date.replace(day=current_date.day + 1) if current_date.day < calendar.monthrange(current_date.year, current_date.month)[1] else current_date.replace(month=current_date.month + 1, day=1) if current_date.month < 12 else current_date.replace(year=current_date.year + 1, month=1, day=1)
-                
-                if current_date > leave.date_fin:
-                    break
-        
-        return Response(calendar_data)
-    
-    def get_holidays(self, year, month):
-        
-        holidays_list = []
+                return leave_days
 
+            # Séparer les congés validés/en attente
+            approved_leaves = []
+            pending_leaves = []
+            
+            for leave in user_leaves:
+                if leave.status == 'en attente':
+                    pending_leaves.extend(build_leave_data(leave))
+                else:
+                    approved_leaves.extend(build_leave_data(leave))
+            
+            # Congés de l'équipe
+            team_leave_days = []
+            for leave in team_leaves:
+                team_leave_days.extend(build_leave_data(leave, True))
+
+            response_data = {
+                'holidays': holidays_data,
+                'leaves': approved_leaves,
+                'pendingLeaves': pending_leaves,
+                'teamLeaves': team_leave_days,
+                'meta': {
+                    'user_id': request.user.id,
+                    'period': f"{year}-{month:02d}",
+                    'generated_at': datetime.now().isoformat()
+                }
+            }
+
+            return Response(response_data)
+
+        except ValueError as ve:
+            logger.error(f"Validation error: {ve}")
+            return Response(
+                {"error": str(ve)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}\n{traceback.format_exc()}")
+            return Response(
+                {"error": "Une erreur technique est survenue"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def get_holidays(self, year, month):
+        holidays_list = []
         try:
             regles = ReglesGlobaux.objects.first()
             if not regles:
-                print("⚠️ Aucune règle globale trouvée.")
-                return []
+                logger.warning("Aucune règle globale trouvée")
+                return holidays_list
 
-            # 🇺🇳 Étape 1 : essaie d'utiliser la lib holidays avec le pays
+            # Jours fériés du pays
             if regles.pays_feries:
                 try:
-                    country_code = regles.pays_feries
-                    if country_code in ['MA', 'DZ', 'TN']:
-                        country_holidays = holidays.CountryHoliday(country_code, years=year, language='fr')
-                    else:
-                        country_holidays = holidays.CountryHoliday(country_code, years=year)
-
+                    country_holidays = holidays.CountryHoliday(
+                        regles.pays_feries,
+                        years=year,
+                        language='fr' if regles.pays_feries in ['MA', 'DZ', 'TN'] else None
+                    )
+                    
                     for date_obj, name in country_holidays.items():
                         if date_obj.year == year and date_obj.month == month:
                             holidays_list.append({
@@ -561,44 +630,42 @@ class CalendarDataView(APIView):
                                 'title': name,
                                 'date': date_obj.isoformat(),
                                 'type': 'holiday',
-                                'description': name
+                                'description': name,
+                                'isCustom': False
                             })
                 except Exception as e:
-                    print(f"❌ Erreur lib holidays : {e}")
+                    logger.error(f"Erreur avec la lib holidays: {e}")
 
-            # 🇲🇦 Étape 2 : fallback avec les jours fériés personnalisés
+            # Jours fériés personnalisés
             if regles.jours_feries:
                 for ferier in regles.jours_feries:
                     try:
-                        # Si dict : {'date': '2024-01-01', 'name': 'Nouvel An'}
                         if isinstance(ferier, dict):
-                            raw_date = ferier.get('date')
+                            date_str = ferier.get('date')
                             name = ferier.get('name', 'Jour férié')
-                            description = ferier.get('description', name)
+                            desc = ferier.get('description', name)
                         else:
-                            raw_date = ferier
+                            date_str = ferier
                             name = 'Jour férié'
-                            description = 'Jour férié défini manuellement'
+                            desc = 'Jour férié défini manuellement'
 
-                        base_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
-                        
-                        # Remplacer l'année par celle demandée
-                        equivalent_date = date(year, base_date.month, base_date.day)
-
-                        if equivalent_date.month == month:
-                            holidays_list.append({
-                                'id': f"manual_{equivalent_date}",
-                                'title': name,
-                                'date': equivalent_date.isoformat(),
-                                'type': 'holiday',
-                                'description': description
-                            })
-
+                        if date_str:
+                            ferier_date = date.fromisoformat(date_str)
+                            equivalent_date = ferier_date.replace(year=year)
+                            
+                            if equivalent_date.month == month:
+                                holidays_list.append({
+                                    'id': f"custom_{equivalent_date}",
+                                    'title': name,
+                                    'date': equivalent_date.isoformat(),
+                                    'type': 'holiday',
+                                    'description': desc,
+                                    'isCustom': True
+                                })
                     except Exception as e:
-                        print(f"⚠️ Erreur parsing jour férié: {ferier} — {e}")
-
-            return holidays_list
+                        logger.error(f"Erreur traitement jour férié {ferier}: {e}")
 
         except Exception as e:
-            print(f"❌ Erreur globale dans get_holidays: {e}")
-            return []
+            logger.error(f"Erreur dans get_holidays: {e}")
+        
+        return holidays_list

@@ -13,7 +13,6 @@ import {
   XCircle,
   Coffee,
   Briefcase,
-  Bug,
 } from "lucide-react"
 import { useAuth } from "../../contexts/AuthContext"
 import { fetchCalendarDataApi, debugHolidaysApi } from "../../services/api"
@@ -22,16 +21,23 @@ interface CalendarEvent {
   id: number
   title: string
   date: string
-  type: "holiday" | "leave" | "pending_leave"
+  type: "holiday" | "leave" | "pending_leave" | "team_leave"
   status?: string
   description?: string
   isHalfDay?: boolean
+  isTeamLeave?: boolean
+  user?: {
+    id: number
+    name: string
+    avatar?: string
+  }
 }
 
 interface CalendarData {
   holidays: CalendarEvent[]
   leaves: CalendarEvent[]
   pendingLeaves: CalendarEvent[]
+  teamLeaves: CalendarEvent[]
 }
 
 const CalendarView: React.FC = () => {
@@ -41,6 +47,7 @@ const CalendarView: React.FC = () => {
     holidays: [],
     leaves: [],
     pendingLeaves: [],
+    teamLeaves: []
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -120,6 +127,7 @@ const CalendarView: React.FC = () => {
         ...calendarData.holidays.filter((h) => h.date === dateStr),
         ...calendarData.leaves.filter((l) => l.date === dateStr),
         ...calendarData.pendingLeaves.filter((p) => p.date === dateStr),
+        ...calendarData.teamLeaves.filter((t) => t.date === dateStr),
       ]
 
       days.push({
@@ -152,6 +160,8 @@ const CalendarView: React.FC = () => {
         return "bg-sky-100 text-sky-800 border-sky-200"
       case "pending_leave":
         return "bg-orange-100 text-orange-800 border-orange-200"
+      case "team_leave":
+        return "bg-purple-100 text-purple-800 border-purple-200"
       default:
         return "bg-stone-100 text-stone-800 border-stone-200"
     }
@@ -167,6 +177,8 @@ const CalendarView: React.FC = () => {
         return <Clock className="w-3 h-3" />
       case "pending_leave":
         return <Clock className="w-3 h-3" />
+      case "team_leave":
+        return <Briefcase className="w-3 h-3" />
       default:
         return <Calendar className="w-3 h-3" />
     }
@@ -186,6 +198,62 @@ const CalendarView: React.FC = () => {
     return day === 0 || day === 6
   }
 
+  const EventCard = ({ event }: { event: CalendarEvent }) => (
+    <div className={`p-4 rounded-lg border ${getEventColor(event)}`}>
+      <div className="flex items-start space-x-3">
+        {event.isTeamLeave && event.user && (
+          <div className="flex-shrink-0">
+            {event.user.avatar ? (
+              <img 
+                src={event.user.avatar} 
+                alt={event.user.name}
+                className="w-10 h-10 rounded-full"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-medium">
+                {event.user.name.charAt(0)}
+              </div>
+            )}
+          </div>
+        )}
+        {!event.isTeamLeave && (
+          <div className="flex-shrink-0 mt-1">
+            {getEventIcon(event)}
+          </div>
+        )}
+        <div className="flex-1">
+          {event.isTeamLeave && event.user && (
+            <h4 className="font-semibold text-purple-800 mb-1">
+              {event.user.name}
+            </h4>
+          )}
+          <div className="flex items-center">
+            <span className="font-medium">
+              {event.isHalfDay && (
+                <span className="text-xs bg-white bg-opacity-50 px-1 rounded mr-1">½</span>
+              )}
+              {event.title.split(' - ').pop()}
+            </span>
+          </div>
+          {event.description && (
+            <p className="text-sm mt-1 text-stone-600">{event.description}</p>
+          )}
+          {event.status && (
+            <div className="mt-2">
+              <span className={`text-xs font-medium px-2 py-1 rounded ${
+                event.status === "validé" ? "bg-emerald-100 text-emerald-800" :
+                event.status === "refusé" ? "bg-red-100 text-red-800" :
+                "bg-orange-100 text-orange-800"
+              }`}>
+                {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
   const days = getDaysInMonth()
   const monthNames = [
     "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
@@ -198,6 +266,7 @@ const CalendarView: React.FC = () => {
     approvedLeaves: calendarData.leaves.filter((l) => l.status === "validé").length,
     pendingLeaves: calendarData.pendingLeaves.length,
     rejectedLeaves: calendarData.leaves.filter((l) => l.status === "refusé").length,
+    teamLeaves: calendarData.teamLeaves.length,
   }
 
   return (
@@ -219,7 +288,7 @@ const CalendarView: React.FC = () => {
             </div>
 
             <div className="flex items-center space-x-4">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
                   <div className="text-amber-600 text-sm font-medium">Jours fériés</div>
                   <div className="text-amber-800 text-xl font-bold">{monthStats.holidays}</div>
@@ -235,6 +304,10 @@ const CalendarView: React.FC = () => {
                 <div className="bg-stone-50 rounded-lg p-3 text-center border border-stone-200">
                   <div className="text-stone-600 text-sm font-medium">Refusés</div>
                   <div className="text-stone-800 text-xl font-bold">{monthStats.rejectedLeaves}</div>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
+                  <div className="text-purple-600 text-sm font-medium">Congés équipe</div>
+                  <div className="text-purple-800 text-xl font-bold">{monthStats.teamLeaves}</div>
                 </div>
               </div>
             </div>
@@ -404,12 +477,13 @@ const CalendarView: React.FC = () => {
                           className={`text-xs px-2 py-1 rounded border flex items-center space-x-1 ${getEventColor(
                             event,
                           )}`}
-                          title={`${event.title}${event.description ? ` - ${event.description}` : ""}`}
+                          title={`${event.isTeamLeave ? `${event.user?.name} - ` : ""}${event.title}${event.description ? ` - ${event.description}` : ""}`}
                         >
                           {getEventIcon(event)}
                           <span className="truncate flex-1">
                             {event.isHalfDay ? "½ " : ""}
-                            {event.title}
+                            {event.isTeamLeave ? `${event.user?.name.split(' ')[0]} - ` : ""}
+                            {event.title.split(' - ').pop()}
                           </span>
                         </div>
                       ))}
@@ -427,7 +501,7 @@ const CalendarView: React.FC = () => {
         {/* Legend */}
         <div className="bg-white rounded-2xl shadow-lg border border-stone-200 p-6">
           <h3 className="text-lg font-semibold text-stone-800 mb-4">Légende</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-amber-100 border border-amber-200 rounded"></div>
               <span className="text-sm text-stone-700">Jours fériés</span>
@@ -443,6 +517,10 @@ const CalendarView: React.FC = () => {
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-stone-100 border border-stone-200 rounded"></div>
               <span className="text-sm text-stone-700">Congés refusés</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-purple-100 border border-purple-200 rounded"></div>
+              <span className="text-sm text-stone-700">Congés équipe</span>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-stone-200">
@@ -489,6 +567,7 @@ const CalendarView: React.FC = () => {
                     ...calendarData.holidays.filter((h) => h.date === dateStr),
                     ...calendarData.leaves.filter((l) => l.date === dateStr),
                     ...calendarData.pendingLeaves.filter((p) => p.date === dateStr),
+                    ...calendarData.teamLeaves.filter((t) => t.date === dateStr),
                   ]
 
                   if (dayEvents.length === 0) {
@@ -502,28 +581,35 @@ const CalendarView: React.FC = () => {
 
                   return (
                     <div className="space-y-4">
-                      {dayEvents.map((event, index) => (
-                        <div
-                          key={index}
-                          className={`p-4 rounded-lg border ${getEventColor(event)} flex items-start space-x-3`}
-                        >
-                          <div className="flex-shrink-0 mt-1">{getEventIcon(event)}</div>
-                          <div className="flex-1">
-                            <h4 className="font-semibold">
-                              {event.isHalfDay ? "Demi-journée - " : ""}
-                              {event.title}
-                            </h4>
-                            {event.description && <p className="text-sm mt-1">{event.description}</p>}
-                            {event.status && (
-                              <div className="mt-2">
-                                <span className="text-xs font-medium">
-                                  Statut: {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                      {dayEvents
+                        .filter(e => e.type === "holiday")
+                        .map((event, index) => (
+                          <EventCard key={`holiday-${index}`} event={event} />
+                        ))}
+
+                      {dayEvents
+                        .filter(e => e.type === "leave" && e.status === "validé")
+                        .map((event, index) => (
+                          <EventCard key={`approved-${index}`} event={event} />
+                        ))}
+
+                      {dayEvents
+                        .filter(e => e.type === "team_leave")
+                        .map((event, index) => (
+                          <EventCard key={`team-${index}`} event={event} />
+                        ))}
+
+                      {dayEvents
+                        .filter(e => e.type === "pending_leave" || e.status === "en attente")
+                        .map((event, index) => (
+                          <EventCard key={`pending-${index}`} event={event} />
+                        ))}
+
+                      {dayEvents
+                        .filter(e => e.status === "refusé")
+                        .map((event, index) => (
+                          <EventCard key={`rejected-${index}`} event={event} />
+                        ))}
                     </div>
                   )
                 })()}
