@@ -152,3 +152,40 @@ export interface TeamWithMembers {
   manager: string;
   membres: TeamMember[];
 }
+
+export interface ApiUser {
+  id: number;
+  email: string;
+  nom: string;
+  prenom: string;
+  role?: string;
+}
+
+export interface SoldeHistory {
+  id: number;
+  user: ApiUser;
+  date_modif: string;
+  difference: number | null;
+  solde_actuel: number;
+}
+
+export interface EmployeeCurrentSolde {
+  id: number;
+  user: ApiUser;
+  solde_actuel: number;
+  date_modif: string;
+  difference: number | null;
+}
+
+export function mapApiUserToUser(apiUser: ApiUser): User {
+  return {
+    id: apiUser.id,
+    username: apiUser.email.split('@')[0],
+    email: apiUser.email,
+    role: (apiUser.role as 'admin' | 'manager' | 'employe') || 'employe',
+    nom: apiUser.nom,
+    prenom: apiUser.prenom,
+    date_joined: new Date().toISOString(),
+    is_active: true
+  };
+}

@@ -1,5 +1,5 @@
 import axios from "axios"
-import type { GlobalRules, User, EquipeFormData, Equipe ,UserFormData,LeaveRequest} from "../types"
+import type { GlobalRules, User, EquipeFormData, Equipe ,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory} from "../types"
 
 const API_BASE_URL = "http://localhost:8000" // Sans /api car tes routes sont du type /auth/login/
 const api = axios.create({
@@ -926,3 +926,22 @@ export const debugHolidaysApi = async (): Promise<any> => {
 
 
 
+// GESTION DES SOLDES 
+export const fetchEmployeeSoldeHistory = async (userId: number): Promise<SoldeHistory[]> => {
+  
+  const response = await api.get(`${API_BASE_URL}/gestion-absences-conges/admin/historique-soldes/${userId}/`, {
+    headers: getAuthHeaders(),
+    
+  });
+  console.log("fetchEmployeeSoldeHistory response:", response.data);
+  return response.data;
+};
+
+export const fetchAllCurrentSoldes = async (): Promise<EmployeeCurrentSolde[]> => {
+  console.log("tocken:", localStorage.getItem("accessToken"));
+  const response = await api.get(`${API_BASE_URL}/gestion-absences-conges/admin/historique-soldes/`, {
+    headers: getAuthHeaders(),
+  });
+  console.log("fetchEmployeeSoldeHistory response:", response.data);
+  return response.data;
+};

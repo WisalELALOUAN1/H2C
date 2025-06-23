@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import ReglesGlobaux, DemandeConge, HistoriqueSolde,Formule, RegleCongé, RegleMembrePersonnalisée # Import des modèles nécessaires
 from datetime import date
+from authentication.serializers import UtilisateurSerializer  # Assurez-vous que ce serializer est défini dans authentication/serializers.py
 class ReglesGlobauxSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReglesGlobaux
@@ -77,3 +78,16 @@ def calculer_conges_acquis(jours_travailles, jours_ouvrables_annuels=230):
     return (jours_travailles * 18) / jours_ouvrables_annuels
 def calculer_jours_ouvrables_annuels(nb_feries=10):
     return (52*5) - 18 - nb_feries
+# Dans gestionAbsencesConges/serializers.py
+class HistoriqueSoldeSerializer(serializers.ModelSerializer):
+    user = UtilisateurSerializer(read_only=True)
+    difference = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HistoriqueSolde
+        fields = ['id', 'user', 'date_modif', 'solde_actuel', 'difference']
+
+    def get_difference(self, obj):
+        if hasattr(obj, 'difference'):
+            return obj.difference
+        return None

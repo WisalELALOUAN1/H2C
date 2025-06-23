@@ -19,6 +19,7 @@ import SettingsView from '../Shared/SettingsView.tsx';
 import ManagerPendingRequests from '../Manager/ManagerPendingRequests.tsx';
 import RegleCongeManager from '../Manager/RegleConge';
 import CalendarView from '../Employe/CalendarView.tsx';
+import AdminSoldeHistory from '../Admin/AdminSoldeHistory';
 
 const MainLayout: React.FC = () => {
   const { user } = useAuth();
@@ -56,6 +57,8 @@ const MainLayout: React.FC = () => {
             return <TeamsCreation />;
           case 'settings':
             return <SettingsView />;
+          case 'solde-history':
+            return <AdminSoldeHistory />;
           
           case "global-rules":
             return <GlobalRulesConfig />;
@@ -66,8 +69,7 @@ const MainLayout: React.FC = () => {
         switch (activeSection) {
           case 'team':
             return <TeamManagement />;
-          case 'projects':
-            return <ProjectsManagement />;
+          
           
           case 'requests':
             return <ManagerPendingRequests />;

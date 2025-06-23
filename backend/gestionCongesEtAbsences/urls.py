@@ -6,7 +6,8 @@ from .views import (
     DemandeCongeValidationView, DemandeCongeRetrieveUpdateDestroyView,
     HolidayAPIView, EquipesManagerView, DashboardManagerView,
     FormuleListView, RegleCongeViewSet, RegleMembreViewSet,
-    CalendarDataView
+    CalendarDataView,AdminHistoriqueSoldeView,
+    AdminUserSoldeHistoryView
 )
 
 router = DefaultRouter()
@@ -26,6 +27,8 @@ urlpatterns = [
     path('manager/tableau-de-bord/', DashboardManagerView.as_view(), name='dashboard-manager'),
     path('formules/', FormuleListView.as_view(), name='formules-list'),
     path('calendrier/', CalendarDataView.as_view(), name='calendar-data'),
+    path('admin/historique-soldes/', AdminHistoriqueSoldeView.as_view(), name='admin-historique-soldes'),
+    path('admin/historique-soldes/<int:user_id>/', AdminUserSoldeHistoryView.as_view(), name='admin-user-solde-history'),
 ]
 
 urlpatterns += router.urls

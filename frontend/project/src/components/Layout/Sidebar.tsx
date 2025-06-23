@@ -12,6 +12,7 @@ import {
   Shield,
   Clock,
   TrendingUp,
+  History,
   Bookmark,
 } from "lucide-react"
 import { useAuth } from "../../contexts/AuthContext"
@@ -36,28 +37,34 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange, isCol
           { id: "analytics", label: "Analytiques", icon: BarChart3 },
           { id: "global-rules", label: "Règles globales", icon: Target },
           { id: "settings", label: "Paramètres", icon: Settings },
-          { id: "security", label: "Sécurité", icon: Shield },
+          { id: "solde-history", label: "Historique soldes", icon: History },
+         
         ]
       case "manager":
         return [
           ...baseItems,
-          { id: "team", label: "Mon équipe", icon: Users },
+          
           { id: "leave-rules", label: "Règles de congé", icon: Bookmark },
-          { id: "projects", label: "Projets", icon: Target },
-          { id: "reports", label: "Rapports", icon: BarChart3 },
-          { id: "calendar", label: "Calendrier", icon: Calendar },
-          { id: "settings", label: "Paramètres", icon: Settings },
           { id: "requests", label: "Demandes d'absence", icon: FileText },
+          { id: "projects", label: "Projets", icon: Target },
+          { id: "settings", label: "Paramètres", icon: Settings },
+          { id: "reports", label: "Rapports", icon: BarChart3 },
+          
+          
+          
         ]
       case "employe":
         return [
           ...baseItems,
-          { id: "tasks", label: "Mes tâches", icon: FileText },
-          { id: "timesheet", label: "Feuille de temps", icon: Clock },
-          { id: "performance", label: "Performance", icon: TrendingUp },
-          { id: "settings", label: "Paramètres", icon: Settings },
+        
           { id: "absences", label: "Mes absences", icon: Calendar },
           { id: "calendar", label: "Calendrier", icon: Calendar },
+           { id: "settings", label: "Paramètres", icon: Settings },
+         
+          { id: "timesheet", label: "Feuille de temps", icon: Clock },
+          { id: "performance", label: "Performance", icon: TrendingUp },
+         
+          
         ]
       default:
         return baseItems

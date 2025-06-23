@@ -21,6 +21,7 @@ import holidays
 from datetime import datetime
 from django.http import JsonResponse
 from gestionUtilisateurs.models import Utilisateur
+from authentication.serializers import UtilisateurSerializer
 from gestionUtilisateurs.models import Equipe
 from rest_framework.exceptions import PermissionDenied
 from gestionUtilisateurs.serializers import EquipeSerializer
@@ -35,8 +36,9 @@ import logging
 from rest_framework.views import APIView
 from rest_framework import permissions, status
 from rest_framework.response import Response
-from django.db.models import Q
-
+from django.db.models import Q, Prefetch
+from django.db.models import Window,F
+from django.db.models.functions import Lag
 import traceback
 from .serializers import calculer_conges_acquis
 class ReglesGlobauxRetrieveUpdateView(generics.RetrieveUpdateAPIView):
@@ -184,9 +186,34 @@ class DemandeCongeValidationView(APIView):
         except DemandeConge.DoesNotExist:
             return Response({"error": "Demande introuvable"}, status=404)
         demande.status = status
-        
+        self.mettre_a_jour_solde(demande)
         demande.save()
         return Response({"message": "Statut mis à jour"})
+    def mettre_a_jour_solde(self, demande):
+        # Calculer la durée du congé
+        delta = demande.date_fin - demande.date_debut
+        jours_conges = delta.days + 1  # +1 pour inclure le dernier jour
+        
+        # Si c'est un demi-jour, compter comme 0.5 jour
+        if demande.demi_jour:
+            jours_conges = 0.5
+        
+        # Récupérer ou créer le dernier historique de solde
+        dernier_historique = HistoriqueSolde.objects.filter(user=demande.user).order_by('-date_modif').first()
+        
+        if dernier_historique:
+            nouveau_solde = dernier_historique.solde_actuel - jours_conges
+        else:
+            # Si pas d'historique, on part des jours acquis annuels
+            regle = RegleCongé.objects.filter(equipe__membres=demande.user).first()
+            jours_acquis = regle.jours_acquis_annuels if regle else 18
+            nouveau_solde = jours_acquis - jours_conges
+        
+        # Créer un nouvel historique
+        HistoriqueSolde.objects.create(
+            user=demande.user,
+            solde_actuel=nouveau_solde
+        )
 
 
 # Par défaut : 52 semaines * 5 jours - 18 jours - nb jours fériés
@@ -669,3 +696,73 @@ class CalendarDataView(APIView):
             logger.error(f"Erreur dans get_holidays: {e}")
         
         return holidays_list
+
+
+class AdminUserSoldeHistoryView(generics.ListAPIView):
+    serializer_class = HistoriqueSoldeSerializer
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get_queryset(self):
+        user_id = self.kwargs.get('user_id')
+        return HistoriqueSolde.objects.filter(
+            user_id=user_id
+        ).annotate(
+            solde_precedent=Window(
+                expression=Lag('solde_actuel'),
+                order_by=F('date_modif').asc()
+            ),
+            difference=F('solde_actuel') - F('solde_precedent')
+        ).order_by('-date_modif')
+class AdminCurrentSoldesView(APIView):
+    """Liste des soldes actuels de tous les employés"""
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request):
+        users = Utilisateur.objects.filter(
+            role='employe'
+        ).prefetch_related('historiquesolde_set')
+        
+        data = []
+        for user in users:
+            last_solde = user.historiquesolde_set.order_by('-date_modif').first()
+            data.append({
+                'user': {
+                    'id': user.id,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'email': user.email
+                },
+                'current_solde': last_solde.solde_actuel if last_solde else 0,
+                'last_update': last_solde.date_modif if last_solde else None
+            })
+    
+class AdminCurrentSoldesView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request):
+        users = Utilisateur.objects.filter(
+            role='employe'
+        ).prefetch_related(
+            Prefetch('historiquesolde_set', queryset=HistoriqueSolde.objects.order_by('-date_modif')))
+        
+        data = []
+        for user in users:
+            last_solde = user.historiquesolde_set.first()  # Le plus récent
+            data.append({
+                'user': UtilisateurSerializer(user).data,
+                'current_solde': last_solde.solde_actuel if last_solde else 0,
+                'last_update': last_solde.date_modif if last_solde else None
+            })
+        print ("DEBUG: Current soldes data:", data)
+        return Response(data)
+class AdminHistoriqueSoldeView(generics.ListAPIView):
+    """
+    Vue API pour récupérer l'historique des soldes de tous les employés.
+    """
+    serializer_class = HistoriqueSoldeSerializer
+
+    def get_queryset(self):
+        print("DEBUG: Récupération de l'historique de solde pour tous les employés")
+        return HistoriqueSolde.objects.all().order_by('-date_modif')
+    
+    
