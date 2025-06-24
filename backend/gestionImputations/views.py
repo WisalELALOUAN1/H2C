@@ -4,8 +4,9 @@ from .models import Projet,SemaineImputation,ImputationHoraire
 from .serializers import ProjetSerializer, SemaineImputationSerializer, ImputationHoraireSerializer,SyntheseMensuelleSerializer,FormationSerializer
 from gestionUtilisateurs.models import Equipe
 from rest_framework.response import Response
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework import status
+from rest_framework.views import APIView
 from datetime import date, timedelta,timezone
 from dateutil import parser
 import calendar
@@ -14,7 +15,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     """
     A simple ViewSet for viewing and editing projects.
     """
-    queryset = Projet.objects.all(actif=True)
+    queryset = Projet.objects.filter(actif=True)
     serializer_class = ProjetSerializer
     permission_classes= [permissions.IsAuthenticated]
     def get_queryset(self):
@@ -35,13 +36,13 @@ class ManagerImputationViewSet(viewsets.ModelViewSet):
         if request.user.role != 'manager':
             return Response({'detail': 'Permission denied.'}, status=403)
         equipes_managed = Equipe.objects.filter(manager=request.user)
-        semaines_a_valider=SemaineImputation.objects.filter(employe__equipes_appartenance__in=equipes_managed,
+        semaines_a_valider=SemaineImputation.objects.filter(employe__equipes_membre__in=equipes_managed,
             statut='soumis').distinct
         #Calcul de la charge de l'equipe
         today=date.today()
         date_debut_semaine=today-today.weekday()
         date_fin_semaine=date_debut_semaine+timedelta(days=6)
-        imputations=ImputationHoraire.objects.filter(employe__equipes_appartenance__in=equipes_managed,
+        imputations=ImputationHoraire.objects.filter(employe__equipes_membre__in=equipes_managed,
             date__range=[date_debut_semaine, date_fin_semaine])
         charge_par_projet = {}
         for imputation in imputations:
@@ -225,7 +226,7 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
         
         # Semaines à valider
         semaines_a_valider = SemaineImputation.objects.filter(
-            employe__equipes_appartenance__in=equipes,
+            employe__equipes_membre__in=equipes,
             statut='soumis'
         ).select_related('employe')
         
@@ -236,7 +237,7 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
         
         # Charge par projet
         imputations = ImputationHoraire.objects.filter(
-            employe__equipes_appartenance__in=equipes,
+            employe__equipes_membre__in=equipes,
             date__range=[date_debut_semaine, date_fin_semaine]
         ).select_related('projet', 'employe')
         
@@ -345,7 +346,7 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
         
         # Construction du queryset
         imputations = ImputationHoraire.objects.filter(
-            employe__equipes_appartenance__in=equipes
+            employe__equipes_membre__in=equipes
         ).select_related('projet', 'employe')
         
         if projet_id:
@@ -374,3 +375,94 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
             pass
         
         return Response(data)
+class SemaineCouranteView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            today = date.today()
+            start_date = today - timedelta(days=today.weekday())
+            end_date = start_date + timedelta(days=6)
+            
+            imputations = ImputationHoraire.objects.filter(
+                employe=request.user,
+                date__range=[start_date, end_date]
+            ).select_related('projet')
+            
+            total_heures = sum(float(imp.heures) for imp in imputations)
+            
+            return Response({
+                'imputations': [
+                    {
+                        'id': imp.id,
+                        'date': imp.date.isoformat(),
+                        'projet': {
+                            'id': imp.projet.id,
+                            'nom': imp.projet.nom
+                        },
+                        'heures': float(imp.heures),
+                        'categorie': imp.categorie
+                    } for imp in imputations
+                ],
+                'total_heures': total_heures,
+                'dates_semaine': [
+                    (start_date + timedelta(days=i)).isoformat()
+                    for i in range(7)
+                ],
+                'statut': 'brouillon'
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class SyntheseMensuelleView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            year = int(request.GET.get('year', date.today().year))
+            month = int(request.GET.get('month', date.today().month))
+            
+            start_date = date(year, month, 1)
+            end_date = date(year, month, calendar.monthrange(year, month)[1])
+            
+            imputations = ImputationHoraire.objects.filter(
+                employe=request.user,
+                date__range=[start_date, end_date]
+            ).select_related('projet')
+            
+            synthese = {}
+            total_heures = 0
+            total_valeur = 0
+            
+            for imp in imputations:
+                projet = imp.projet.nom
+                if projet not in synthese:
+                    synthese[projet] = {
+                        'heures': 0,
+                        'taux': float(imp.projet.taux_horaire),
+                        'valeur': 0
+                    }
+                synthese[projet]['heures'] += float(imp.heures)
+                synthese[projet]['valeur'] += float(imp.heures) * float(imp.projet.taux_horaire)
+                total_heures += float(imp.heures)
+                total_valeur += float(imp.heures) * float(imp.projet.taux_horaire)
+            
+            return Response({
+                'synthese': synthese,
+                'total_heures': total_heures,
+                'total_valeur': total_valeur,
+                'periode': {
+                    'debut': start_date.isoformat(),
+                    'fin': end_date.isoformat()
+                }
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

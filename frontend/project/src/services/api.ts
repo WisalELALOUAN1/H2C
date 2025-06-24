@@ -1,5 +1,5 @@
 import axios from "axios"
-import type { GlobalRules, User, EquipeFormData, Equipe ,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory} from "../types"
+import type { GlobalRules, User, EquipeFormData, Equipe ,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation} from "../types"
 
 const API_BASE_URL = "http://localhost:8000" // Sans /api car tes routes sont du type /auth/login/
 const api = axios.create({
@@ -943,5 +943,43 @@ export const fetchAllCurrentSoldes = async (): Promise<EmployeeCurrentSolde[]> =
     headers: getAuthHeaders(),
   });
   console.log("fetchEmployeeSoldeHistory response:", response.data);
+  return response.data;
+};
+
+
+//Employe Dashboard
+export const getCurrentWeekImputations = async (): Promise<WeeklyImputation> => {
+  const response = await api.get('/gestion-imputations-projet/employe/imputations/semaine_courante/', {
+    headers: getAuthHeaders()
+  });
+  return response.data;
+};
+
+export const submitWeek = async (): Promise<void> => {
+  await api.post('/gestion-imputations-projet/employe/imputations/soumettre_semaine/', {}, {
+    headers: getAuthHeaders()
+  });
+};
+
+export const getMonthlySummary = async (year: number, month: number): Promise<MonthlySummary> => {
+  const response = await api.get('/gestion-imputations-projet/employe/imputations/synthese_mensuelle/', {
+    params: { year, month },
+    headers: getAuthHeaders()
+  });
+  return response.data;
+};
+
+export const getLeaveRequests = async (): Promise<LeaveRequest[]> => {
+  const response = await api.get('/gestion-absences-conges/mes-demandes/', {
+    headers: getAuthHeaders()
+  });
+  return response.data;
+};
+
+export const getCurrentSolde = async (): Promise<EmployeeCurrentSolde> => {
+  const response = await api.get('/gestion-absences-conges/mon-solde/', {
+    headers: getAuthHeaders()
+  });
+  console.log(response.data)
   return response.data;
 };

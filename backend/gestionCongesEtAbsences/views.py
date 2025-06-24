@@ -11,7 +11,8 @@ from .serializers import (
     RegleMembreSerializer,
     FormuleSerializer,
     DemandeCongeSerializer,
-    HistoriqueSoldeSerializer
+    HistoriqueSoldeSerializer,
+    SoldeDetailSerializer
 )
 from datetime import timedelta
 from rest_framework.views import APIView
@@ -795,5 +796,76 @@ class AdminHistoriqueSoldeView(generics.ListAPIView):
     def get_queryset(self):
         print("DEBUG: Récupération de l'historique de solde pour tous les employés")
         return HistoriqueSolde.objects.all().order_by('-date_modif')
-    
-    
+class SoldeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # 1. Récupération du solde actuel
+            solde_actuel = self.get_current_solde(user)
+            
+            # 2. Calcul des congés pris ce mois
+            today = date.today()
+            first_day = date(today.year, today.month, 1)
+            last_day = date(today.year, today.month + 1, 1) - timedelta(days=1)
+            
+            conges = DemandeConge.objects.filter(
+                user=user,
+                date_debut__lte=last_day,
+                date_fin__gte=first_day,
+                status='validé'
+            )
+            print('conge',conges)
+            jours_conges = 0
+            for conge in conges:
+                start = max(conge.date_debut, first_day)
+                end = min(conge.date_fin, last_day)
+                jours_conges += (end - start).days + 1
+            
+            # 3. Récupération des règles
+            regles = self.get_regles_conge(user)
+            print('------------------solde_actuel', solde_actuel.get('solde', 0))
+                
+            return Response({
+                'solde_actuel': solde_actuel.get('solde', 0),
+                'date_maj': solde_actuel.get('date_maj'),
+                'conges_pris_mois': jours_conges,
+                'jours_acquis_annuels': regles.get('jours_acquis_annuels', 25),
+                'jours_restants': regles.get('jours_acquis_annuels', 25) - jours_conges,
+                'last_update': datetime.now().isoformat()
+            })
+
+        except Exception as e:
+            print(f"Erreur récupération solde: {str(e)}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def get_current_solde(self, user):
+        solde = HistoriqueSolde.objects.filter(user=user).order_by('-date_modif').first()
+        return {
+            'solde': solde.solde_actuel if solde else 0,
+            'date_maj': solde.date_modif.isoformat() if solde else None
+        }
+
+    def get_regles_conge(self, user):
+        try:
+            # Utilisation de equipes_membre au lieu de equipes_appartenance
+            equipe = user.equipes_membre.first()
+            if equipe:
+                regle = RegleCongé.objects.filter(equipe=equipe).first()
+                if regle:
+                    return {
+                        'jours_acquis_annuels': regle.jours_acquis_annuels,
+                        'jours_ouvrables_annuels': regle.jours_ouvrables_annuels
+                    }
+        except Exception as e:
+            print(f"Erreur récupération règles: {str(e)}")
+        
+        return {
+            'jours_acquis_annuels': 25,
+            'jours_ouvrables_annuels': 230
+        }

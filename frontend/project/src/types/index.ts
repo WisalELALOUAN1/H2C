@@ -175,6 +175,12 @@ export interface EmployeeCurrentSolde {
   solde_actuel: number;
   date_modif: string;
   difference: number | null;
+  conge_paye: number;
+  rtt: number;
+  conges_pris_mois: number;
+  jours_restants:number;
+  jours_acquis_annuels:number;
+
 }
 
 export function mapApiUserToUser(apiUser: ApiUser): User {
@@ -188,4 +194,31 @@ export function mapApiUserToUser(apiUser: ApiUser): User {
     date_joined: new Date().toISOString(),
     is_active: true
   };
+}
+export interface WeeklyImputation {
+  imputations: {
+    id: string;
+    date: string;
+    projet: {
+      id: string;
+      nom: string;
+    };
+    heures: number;
+    categorie: string;
+  }[];
+  semaine_status: 'brouillon' | 'soumis' | 'valide' | 'rejete';
+  dates_semaine: string[];
+}
+
+export interface MonthlySummary {
+  synthese: {
+    [projet: string]: {
+      heures: number;
+      projet_id: string;
+      taux_horaire: number;
+    };
+  };
+  total_heures: number;
+  total_valeur: number;
+  periode: string;
 }

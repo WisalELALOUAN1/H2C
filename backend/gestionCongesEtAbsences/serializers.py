@@ -91,3 +91,24 @@ class HistoriqueSoldeSerializer(serializers.ModelSerializer):
         if hasattr(obj, 'difference'):
             return obj.difference
         return None
+class SoldeDetailSerializer(serializers.ModelSerializer):
+    type = serializers.SerializerMethodField()
+    motif_display = serializers.CharField(source='get_motif_display')
+
+    class Meta:
+        model = HistoriqueSolde
+        fields = [
+            'date_modif',
+            'conge_paye',
+            'rtt',
+            'motif',
+            'motif_display',
+            'type',
+            'commentaire'
+        ]
+    
+    def get_type(self, obj):
+        """Détermine si c'est un crédit ou débit"""
+        if obj.motif in ['ACQUISITION', 'REGULARISATION']:
+            return 'credit'
+        return 'debit'

@@ -56,3 +56,7 @@ class FormationSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'employe': {'read_only': True},
         }
+class SyntheseMensuelleSerializer(serializers.Serializer):
+    projet = serializers.CharField()
+    heures = serializers.DecimalField(max_digits=10, decimal_places=2)
+    valeur = serializers.DecimalField(max_digits=12, decimal_places=2)

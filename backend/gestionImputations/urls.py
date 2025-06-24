@@ -7,5 +7,6 @@ router.register(r'employe/imputations', views.EmployeImputationViewSet, basename
 router.register(r'manager/dashboard', views.ManagerDashboardViewSet, basename='manager-dashboard')
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('employe/imputations/semaine_courante/', views.SemaineCouranteView.as_view(), name='semaine_courante'),
+    path('employe/imputations/synthese_mensuelle/', views.SyntheseMensuelleView.as_view(), name='synthese_mensuelle'),
 ]

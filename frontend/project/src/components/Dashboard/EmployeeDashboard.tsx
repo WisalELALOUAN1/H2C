@@ -1,95 +1,529 @@
-import React from 'react';
-import { Calendar, Clock, FileText, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { 
+  getCurrentWeekImputations,
+  submitWeek,
+  getMonthlySummary,
+  getCurrentSolde 
+} from '../../services/api';
+import { 
+  WeeklyImputation, 
+  MonthlySummary, 
+  EmployeeCurrentSolde
+} from '../../types';
+import {
+  Clock,
+  TrendingUp,
+  User,
+  Calendar,
+  XCircle
+} from 'lucide-react';
 
-const EmployeeDashboard: React.FC = () => {
-  const { user } = useAuth();
+// Error Boundary Component
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  state = { hasError: false };
 
-  const stats = [
-    { icon: Clock, label: 'Heures cette semaine', value: '38h', color: 'text-blue-600' },
-    { icon: FileText, label: 'Tâches en cours', value: '7', color: 'text-green-600' },
-    { icon: Calendar, label: 'Congés restants', value: '12 jours', color: 'text-purple-600' },
-    { icon: TrendingUp, label: 'Performance', value: '92%', color: 'text-orange-600' }
-  ];
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
 
-  const recentTasks = [
-    { id: 1, title: 'Rapport mensuel', status: 'En cours', deadline: '2024-01-15' },
-    { id: 2, title: 'Formation sécurité', status: 'Terminé', deadline: '2024-01-10' },
-    { id: 3, title: 'Réunion équipe', status: 'Planifié', deadline: '2024-01-20' }
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Error caught:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-amber-50 flex items-center justify-center">
+          <div className="text-center p-8">
+            <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Erreur</h2>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-amber-600 text-white px-6 py-2 rounded-lg hover:bg-amber-700 transition-colors"
+            >
+              Recharger
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
+  const statusConfig = {
+    brouillon: { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: 'Brouillon' },
+    soumis: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Soumis' },
+    valide: { color: 'bg-green-100 text-green-800 border-green-200', label: 'Validé' },
+    rejete: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Rejeté' }
+  };
+
+  const config = statusConfig[status as keyof typeof statusConfig] || { 
+    color: 'bg-gray-100 text-gray-800 border-gray-200', 
+    label: status 
+  };
+
+  return (
+    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${config.color}`}>
+      {config.label}
+    </span>
+  );
+};
+
+const StatCard: React.FC<{
+  icon: React.ReactNode;
+  value: string;
+  label: string;
+  gradient: string;
+}> = ({ icon, value, label, gradient }) => (
+  <div className={`${gradient} text-white p-6 rounded-xl shadow-lg transition-all duration-300 hover:-translate-y-1`}>
+    <div className="flex justify-between mb-4">
+      <div className="text-white/80">{icon}</div>
+    </div>
+    <div className="text-3xl font-bold mb-1">{value}</div>
+    <div className="text-white/80 text-sm font-medium">{label}</div>
+  </div>
+);
+
+const LoadingSpinner: React.FC = () => (
+  <div className="flex justify-center items-center py-12">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600"></div>
+  </div>
+);
+
+const TabNavigation: React.FC<{
+  activeTab: number;
+  onTabChange: (index: number) => void;
+}> = ({ activeTab, onTabChange }) => {
+  const tabs = [
+    { label: 'Imputations', icon: <Clock className="w-5 h-5" /> },
+    { label: 'Synthèse', icon: <TrendingUp className="w-5 h-5" /> },
+    { label: 'Profil', icon: <User className="w-5 h-5" /> }
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-brown-600 to-brown-700 rounded-xl p-6 text-white">
-        <h1 className="text-2xl font-bold">
-          Bonjour, {user?.firstName} !
-        </h1>
-        <p className="text-brown-100 mt-2">
-          Voici un aperçu de votre espace de travail
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, index) => (
-          <div key={index} className="bg-white rounded-xl p-6 shadow-sm border border-beige-200">
-            <div className="flex items-center">
-              <div className={`p-2 rounded-lg bg-gray-100 ${stat.color}`}>
-                <stat.icon className="h-6 w-6" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-brown-600">{stat.label}</p>
-                <p className="text-2xl font-bold text-brown-900">{stat.value}</p>
-              </div>
-            </div>
-          </div>
+    <div className="bg-gradient-to-r from-amber-800 to-amber-700 p-1 rounded-xl mb-8">
+      <div className="flex space-x-1">
+        {tabs.map((tab, index) => (
+          <button
+            key={index}
+            onClick={() => onTabChange(index)}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex-1 justify-center ${
+              activeTab === index
+                ? 'bg-amber-50 text-amber-800 shadow-md'
+                : 'text-amber-100 hover:bg-amber-700/50'
+            }`}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+          </button>
         ))}
       </div>
+    </div>
+  );
+};
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-beige-200">
-          <h3 className="text-lg font-semibold text-brown-900 mb-4">Tâches récentes</h3>
-          <div className="space-y-3">
-            {recentTasks.map((task) => (
-              <div key={task.id} className="flex justify-between items-center p-3 bg-beige-50 rounded-lg">
-                <div>
-                  <h4 className="font-medium text-brown-900">{task.title}</h4>
-                  <p className="text-sm text-brown-600">Échéance: {task.deadline}</p>
-                </div>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  task.status === 'Terminé' 
-                    ? 'bg-green-100 text-green-800'
-                    : task.status === 'En cours'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-yellow-100 text-yellow-800'
+const WeeklyImputationsTab: React.FC<{
+  weekImputations: WeeklyImputation | null;
+  loading: boolean;
+  onSubmitWeek: () => void;
+}> = ({ weekImputations, loading, onSubmitWeek }) => {
+  if (loading) return <LoadingSpinner />;
+  if (!weekImputations) return <div className="text-center py-12 text-gray-500">Aucune donnée</div>;
+
+  const totalHours = weekImputations.imputations.reduce((sum, imp) => sum + (imp.heures || 0), 0);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <Clock className="w-8 h-8 text-amber-600" />
+          <h2 className="text-2xl font-bold text-gray-800">Imputations</h2>
+        </div>
+        <div className="text-right">
+          <div className="text-3xl font-bold text-red-600">{totalHours.toFixed(1)}h</div>
+          <div className="text-sm text-gray-600">Total semaine</div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gradient-to-r from-amber-800 to-amber-700 text-white">
+              <tr>
+                <th className="px-6 py-4 text-left">Date</th>
+                <th className="px-6 py-4 text-left">Projet</th>
+                <th className="px-6 py-4 text-left">Heures</th>
+                <th className="px-6 py-4 text-left">Catégorie</th>
+              </tr>
+            </thead>
+            <tbody>
+              {weekImputations.imputations.map((imputation, index) => (
+                <tr key={imputation.id} className={`border-b hover:bg-amber-50/30 ${
+                  index % 2 === 0 ? 'bg-amber-50/20' : 'bg-white'
                 }`}>
-                  {task.status}
-                </span>
-              </div>
-            ))}
+                  <td className="px-6 py-4 font-semibold">
+                    {new Date(imputation.date).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 text-amber-800 font-semibold">
+                    {imputation.projet.nom}
+                  </td>
+                  <td className="px-6 py-4 font-bold text-red-600">
+                    {(imputation.heures || 0).toFixed(1)}h
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm">
+                      {imputation.categorie}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="bg-gradient-to-r from-amber-50 to-white p-6 rounded-xl border border-amber-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <h3 className="text-lg font-semibold text-gray-800">Statut :</h3>
+            <StatusBadge status={weekImputations.semaine_status} />
+          </div>
+          
+          {weekImputations.semaine_status === 'brouillon' && (
+            <button
+              onClick={onSubmitWeek}
+              disabled={loading}
+              className="bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-3 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all shadow-lg hover:shadow-xl disabled:opacity-50"
+            >
+              Soumettre
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MonthlySummaryTab: React.FC<{
+  monthlySummary: MonthlySummary | null;
+  loading: boolean;
+}> = ({ monthlySummary, loading }) => {
+  if (loading) return <LoadingSpinner />;
+  if (!monthlySummary) return <div className="text-center py-12 text-gray-500">Aucune donnée</div>;
+
+  const totalHours = monthlySummary.total_heures || 0;
+  const totalValue = monthlySummary.total_valeur || 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center space-x-3">
+        <TrendingUp className="w-8 h-8 text-amber-600" />
+        <h2 className="text-2xl font-bold text-gray-800">Synthèse</h2>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+            <div className="p-6 border-b">
+              <h3 className="text-lg font-semibold text-gray-800">Projets</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-amber-800 to-amber-700 text-white">
+                  <tr>
+                    <th className="px-6 py-4 text-left">Projet</th>
+                    <th className="px-6 py-4 text-left">Heures</th>
+                    <th className="px-6 py-4 text-left">Valeur</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(monthlySummary.synthese || {}).map(([projet, data], index) => (
+                    <tr key={projet} className={`border-b hover:bg-amber-50/30 ${
+                      index % 2 === 0 ? 'bg-amber-50/20' : 'bg-white'
+                    }`}>
+                      <td className="px-6 py-4 font-semibold text-amber-800">{projet}</td>
+                      <td className="px-6 py-4 font-bold">{(data.heures || 0).toFixed(2)}h</td>
+                      <td className="px-6 py-4 font-bold text-red-600">
+                        €{((data.heures || 0) * (data.taux_horaire || 0)).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-beige-200">
-          <h3 className="text-lg font-semibold text-brown-900 mb-4">Prochains événements</h3>
-          <div className="space-y-3">
-            <div className="flex items-center p-3 bg-beige-50 rounded-lg">
-              <Calendar className="h-5 w-5 text-brown-600 mr-3" />
-              <div>
-                <h4 className="font-medium text-brown-900">Réunion équipe</h4>
-                <p className="text-sm text-brown-600">Aujourd'hui, 14h00</p>
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Totaux</h3>
+            
+            <div className="space-y-4">
+              <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-4 rounded-lg border border-amber-200">
+                <div className="text-sm text-amber-700 mb-1">Heures</div>
+                <div className="text-2xl font-bold text-amber-800">
+                  {totalHours.toFixed(2)}h
+                </div>
               </div>
-            </div>
-            <div className="flex items-center p-3 bg-beige-50 rounded-lg">
-              <Calendar className="h-5 w-5 text-brown-600 mr-3" />
-              <div>
-                <h4 className="font-medium text-brown-900">Formation</h4>
-                <p className="text-sm text-brown-600">Demain, 9h00</p>
+              
+              <div className="bg-gradient-to-r from-red-50 to-red-100 p-4 rounded-lg border border-red-200">
+                <div className="text-sm text-red-700 mb-1">Valeur</div>
+                <div className="text-2xl font-bold text-red-600">
+                  €{totalValue.toFixed(2)}
+                </div>
+              </div>
+              
+              <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200">
+                <div className="text-sm text-gray-700 mb-1">Période</div>
+                <div className="text-lg font-semibold text-gray-800">
+                  {typeof monthlySummary.periode === 'object' && monthlySummary.periode !== null && 'debut' in monthlySummary.periode && 'fin' in monthlySummary.periode
+                    ? `${new Date((monthlySummary.periode as { debut: string; fin: string }).debut).toLocaleDateString()} - 
+                       ${new Date((monthlySummary.periode as { debut: string; fin: string }).fin).toLocaleDateString()}`
+                    : typeof monthlySummary.periode === 'string'
+                      ? monthlySummary.periode
+                      : 'N/A'}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+  );
+};
+
+const PersonalDataTab: React.FC<{
+  user: any;
+  currentSolde: EmployeeCurrentSolde | null;
+  loading: boolean;
+}> = ({ user, currentSolde, loading }) => {
+  if (loading) return <LoadingSpinner />;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center space-x-3">
+        <User className="w-8 h-8 text-amber-600" />
+        <h2 className="text-2xl font-bold text-gray-800">Profil</h2>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Informations</h3>
+          
+          <div className="space-y-3">
+            {[
+              { label: 'Nom', value: `${user.prenom || ''} ${user.nom || ''}`.trim() || 'N/A' },
+              { label: 'Email', value: user.email || 'N/A' },
+              { label: 'Rôle', value: user.role || 'N/A' },
+             
+            ].map(({ label, value }) => (
+              <div key={label} className="flex">
+                <div className="font-semibold text-amber-800 w-24">{label}:</div>
+                <div className="text-gray-700">{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Congés</h3>
+          
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg border border-green-200 text-center">
+              <div className="text-2xl font-bold text-green-600 mb-1">
+                {currentSolde?.jours_restants || 0}
+              </div>
+              <div className="text-sm text-green-700">Restants</div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-4 rounded-lg border border-amber-200 text-center">
+              <div className="text-2xl font-bold text-amber-600 mb-1">
+                {currentSolde?.conges_pris_mois || 0}
+              </div>
+              <div className="text-sm text-amber-700">Pris (mois)</div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200 text-center">
+              <div className="text-2xl font-bold text-blue-600 mb-1">
+                {currentSolde?.jours_acquis_annuels || 0}
+              </div>
+              <div className="text-sm text-blue-700">Acquis (an)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const EmployeeDashboard: React.FC = () => {
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState(0);
+  const [weekImputations, setWeekImputations] = useState<WeeklyImputation | null>(null);
+  const [monthlySummary, setMonthlySummary] = useState<MonthlySummary | null>(null);
+  const [currentSolde, setCurrentSolde] = useState<EmployeeCurrentSolde | null>(null);
+  const [loading, setLoading] = useState({
+    week: false,
+    month: false,
+    solde: false
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      loadCurrentWeek();
+      loadMonthlySummary();
+      loadCurrentSolde();
+    }
+  }, [user]);
+
+  const loadCurrentWeek = async () => {
+    setLoading(prev => ({...prev, week: true}));
+    try {
+      const data = await getCurrentWeekImputations();
+      setWeekImputations(data);
+    } catch (err) {
+      console.error('Erreur:', err);
+      setError('Erreur de chargement');
+    } finally {
+      setLoading(prev => ({...prev, week: false}));
+    }
+  };
+
+  const loadMonthlySummary = async () => {
+    setLoading(prev => ({...prev, month: true}));
+    try {
+      const today = new Date();
+      const data = await getMonthlySummary(today.getFullYear(), today.getMonth() + 1);
+      setMonthlySummary(data);
+    } catch (err) {
+      console.error('Erreur:', err);
+      setError('Erreur de chargement');
+    } finally {
+      setLoading(prev => ({...prev, month: false}));
+    }
+  };
+
+  const loadCurrentSolde = async () => {
+    setLoading(prev => ({...prev, solde: true}));
+    try {
+      const data = await getCurrentSolde();
+      console.log("Données solde:", data); // Debug
+      setCurrentSolde(data);
+    } catch (err) {
+      console.error('Erreur:', err);
+      setError('Erreur de chargement');
+    } finally {
+      setLoading(prev => ({...prev, solde: false}));
+    }
+  };
+
+  const handleSubmitWeek = async () => {
+    try {
+      await submitWeek();
+      await loadCurrentWeek();
+    } catch (err) {
+      console.error('Erreur:', err);
+      setError('Erreur de soumission');
+    }
+  };
+
+  const totalHours = weekImputations?.imputations.reduce((sum, imp) => sum + (imp.heures || 0), 0) || 0;
+  const uniqueProjectsCount = new Set(weekImputations?.imputations.map(imp => imp.projet?.nom)).size || 0;
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-amber-50 flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-amber-50">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-amber-800 to-red-600 bg-clip-text text-transparent mb-2">
+              Tableau de Bord
+            </h1>
+            <p className="text-lg text-amber-700 font-medium">
+              Bonjour, {user.prenom}
+            </p>
+          </div>
+          
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 flex justify-between">
+              <div className="flex items-center space-x-2">
+                <XCircle className="w-5 h-5" />
+                <span>{error}</span>
+              </div>
+              <button onClick={() => setError(null)}>
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <StatCard
+              icon={<Clock className="w-8 h-8" />}
+              value={`${totalHours.toFixed(1)}h`}
+              label="Semaine"
+              gradient="bg-gradient-to-br from-amber-600 to-amber-700"
+            />
+            <StatCard
+              icon={<TrendingUp className="w-8 h-8" />}
+              value={`${monthlySummary?.total_heures?.toFixed(1) || '0'}h`}
+              label="Mois"
+              gradient="bg-gradient-to-br from-red-600 to-red-700"
+            />
+            <StatCard
+              icon={<Calendar className="w-8 h-8" />}
+              value={uniqueProjectsCount.toString()}
+              label="Projets"
+              gradient="bg-gradient-to-br from-blue-600 to-blue-700"
+            />
+            <StatCard
+              icon={<User className="w-8 h-8" />}
+              value={`${currentSolde?.conges_pris_mois || 0}/${currentSolde?.jours_acquis_annuels || 0}`}
+              label="Congés"
+              gradient="bg-gradient-to-br from-green-600 to-green-700"
+            />
+          </div>
+
+          <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+
+          <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
+            {activeTab === 0 && (
+              <WeeklyImputationsTab
+                weekImputations={weekImputations}
+                loading={loading.week}
+                onSubmitWeek={handleSubmitWeek}
+              />
+            )}
+            {activeTab === 1 && (
+              <MonthlySummaryTab
+                monthlySummary={monthlySummary}
+                loading={loading.month}
+              />
+            )}
+            {activeTab === 2 && (
+              <PersonalDataTab
+                user={user}
+                currentSolde={currentSolde}
+                loading={loading.solde}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </ErrorBoundary>
   );
 };
 
