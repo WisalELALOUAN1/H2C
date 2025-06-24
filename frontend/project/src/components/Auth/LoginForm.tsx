@@ -27,7 +27,7 @@ export default function LoginForm() {
     const result: LoginResult = await login(email, password);
     setIsLoading(false);
 
-    // Première connexion :
+    // Premiere connexion :
     if (typeof result === 'object' && 'first_login' in result) {
       localStorage.setItem('firstLoginEmail', result.email);
       navigate('/change-password', { state: { email: result.email, message: result.message } });
@@ -37,7 +37,7 @@ export default function LoginForm() {
     if (typeof result === 'object' && 'user' in result) {
       const role = result.user.role;
       if (role === 'admin') {
-        window.location.href = '/admin/dashboard'; // Forcer le reload pour le contexte
+        window.location.href = '/admin/dashboard'; 
       } else if (role === 'manager') {
         window.location.href = '/manager/dashboard';
       } else if (role === 'employe' || role === 'employee') {
@@ -55,14 +55,14 @@ export default function LoginForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-beige-50 to-brown-50 p-4">
-      {/* Éléments décoratifs en arrière-plan */}
+      
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-brown-400/20 to-amber-600/20 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-tr from-orange-400/20 to-brown-600/20 rounded-full blur-3xl"></div>
       </div>
 
       <div className="relative max-w-md w-full">
-        {/* Carte principale avec effet glassmorphism */}
+        {/* Carte principale  */}
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
           {/* Header avec gradient */}
           <div className="bg-gradient-to-r from-brown-600 to-amber-700 p-8 text-center">
@@ -102,7 +102,7 @@ export default function LoginForm() {
                 </div>
               </div>
 
-              {/* Champ Mot de passe */}
+              {/* Champ password */}
               <div className="space-y-2">
                 <label htmlFor="password" className="block text-sm font-semibold text-brown-700">
                   Mot de passe
@@ -161,7 +161,7 @@ export default function LoginForm() {
                 )}
               </button>
 
-              {/* Lien mot de passe oublié */}
+              {/* Lien mot de passe oublie */}
               <div className="text-center">
                 <button
                   type="button"

@@ -34,16 +34,16 @@ export default function ResetPasswordConfirm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-beige-50 to-brown-50 p-4">
-      {/* Éléments décoratifs en arrière-plan */}
+      
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-brown-400/20 to-amber-600/20 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-tr from-orange-400/20 to-brown-600/20 rounded-full blur-3xl"></div>
       </div>
 
       <div className="relative max-w-md w-full">
-        {/* Carte principale avec effet glassmorphism */}
+        {/* Carte principale  */}
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
-          {/* Header avec gradient */}
+          {/* Header =*/}
           <div className="bg-gradient-to-r from-brown-600 to-amber-700 p-8 text-center">
             <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
               <Key className="h-8 w-8 text-white" />
@@ -66,7 +66,7 @@ export default function ResetPasswordConfirm() {
                 </p>
               </div>
 
-              {/* Champ Email */}
+              {/* Champ pour l'email */}
               <div className="space-y-2">
                 <label htmlFor="email" className="block text-sm font-semibold text-brown-700">
                   Adresse email
@@ -87,7 +87,7 @@ export default function ResetPasswordConfirm() {
                 </div>
               </div>
 
-              {/* Champ Code de réinitialisation */}
+              {/* Champ du  code de reinitialisation */}
               <div className="space-y-2">
                 <label htmlFor="resetToken" className="block text-sm font-semibold text-brown-700">
                   Code de réinitialisation
@@ -108,7 +108,7 @@ export default function ResetPasswordConfirm() {
                 </div>
               </div>
 
-              {/* Champ Nouveau mot de passe */}
+              {/* Champ pour la saisi du  nouveau mot de passe */}
               <div className="space-y-2">
                 <label htmlFor="newPassword" className="block text-sm font-semibold text-brown-700">
                   Nouveau mot de passe
@@ -154,7 +154,7 @@ export default function ResetPasswordConfirm() {
                 )}
               </div>
 
-              {/* Messages d'erreur et de succès */}
+              {/* Messages d'erreur et de succes */}
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-3 animate-pulse">
                   <p className="text-red-600 text-sm text-center font-medium">{error}</p>
@@ -170,7 +170,7 @@ export default function ResetPasswordConfirm() {
                 </div>
               )}
 
-              {/* Bouton de réinitialisation */}
+              {/* Bouton de reinitialisation */}
               <button
                 type="submit"
                 disabled={loading}

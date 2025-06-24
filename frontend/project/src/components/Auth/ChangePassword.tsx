@@ -4,12 +4,11 @@ export default function ChangePassword() {
   const [newPassword, setNewPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [message, setMessage] = useState('');
-  // IMPORTANT : ici, vérifie que tu utilises la BONNE clé !
-  // Elle doit être identique à celle utilisée dans LoginForm avant la redirection
+ 
   const email =
     localStorage.getItem('firstLoginEmail') || localStorage.getItem('resetEmail') || '';
 
-  // Affiche toujours l'email utilisé pour la requête
+  
   console.log('ChangePassword : Email utilisé pour le changement de mot de passe :', email);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,7 +22,7 @@ export default function ChangePassword() {
       return;
     }
 
-    // Affiche le payload envoyé
+ 
     console.log('Payload envoyé :', {
       email,
       new_password: newPassword,
@@ -35,7 +34,7 @@ export default function ChangePassword() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, new_password: newPassword }),
     });
-    // Affiche la réponse brute (status + headers)
+
     console.warn('Réponse brute du changement de mot de passe:', resp);
 
     let data = null;
@@ -48,7 +47,7 @@ export default function ChangePassword() {
 
     if (data && data.message) {
       setMessage('Mot de passe modifié, veuillez vous connecter');
-      // On peut aussi rediriger vers le login si on veut
+  
       setTimeout(() => window.location.href = '/', 2000);
     } else {
       setMessage((data && data.error) || 'Erreur inattendue');
@@ -83,9 +82,9 @@ export default function ChangePassword() {
           Changer le mot de passe
         </button>
         {message && <div className="mt-4 text-center text-red-600">{message}</div>}
-        {/* Affiche le debug email en-dessous si besoin */}
+       
         <div className="mt-2 text-xs text-gray-400">
-          Email pour la requête : <b>{email || '(vide)'}</b>
+          Email  : <b>{email || '(vide)'}</b>
         </div>
       </form>
     </div>
