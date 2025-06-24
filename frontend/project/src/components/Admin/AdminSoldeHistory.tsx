@@ -28,7 +28,7 @@ const AdminSoldeHistory: React.FC = () => {
           throw new Error('Format de données invalide');
         }
 
-        // Dédupliquer les employés par ID pour éviter les doublons
+        // Eviter les doublons lors de la recuperation des employes
         const uniqueEmployees = soldes.reduce((acc: EmployeeCurrentSolde[], current) => {
           const existingEmployee = acc.find(emp => emp.user.id === current.user.id);
           if (!existingEmployee) {
