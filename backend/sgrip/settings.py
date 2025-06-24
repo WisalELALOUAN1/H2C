@@ -41,7 +41,8 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "authentication",
     'gestionUtilisateurs',
-   "gestionCongesEtAbsences",
+    "gestionCongesEtAbsences",
+    "gestionImputations",
     "corsheaders",
     'drf_spectacular',
     'drf_spectacular_sidecar',
@@ -158,7 +159,7 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),  # ← Change selon ton besoin
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),  # ← Change selon ton besoin
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": True,

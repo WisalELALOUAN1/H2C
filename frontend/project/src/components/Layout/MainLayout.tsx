@@ -85,8 +85,7 @@ const MainLayout: React.FC = () => {
         switch (activeSection) {
           case 'tasks':
             return <TasksManagement />;
-          case 'timesheet':
-            return <TimesheetManagement />;
+          
           case 'calendar':
             return <CalendarView />;
           case 'absences':

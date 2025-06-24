@@ -53,13 +53,34 @@ class ReglesGlobauxRetrieveUpdateView(generics.RetrieveUpdateAPIView):
 
 
 
+def get_jours_utilises_pour_annee(user, annee):
+    debut_annee = date(annee, 1, 1)
+    fin_annee = date(annee, 12, 31)
 
+    conges_valides = DemandeConge.objects.filter(
+        user=user,
+        status='validé',
+        date_fin__gte=debut_annee,
+        date_debut__lte=fin_annee
+    )
+
+    jours_utilises = 0
+    for conge in conges_valides:
+        # Découper la portion de congé qui tombe sur l’année courante
+        date_debut = max(conge.date_debut, debut_annee)
+        date_fin = min(conge.date_fin, fin_annee)
+        nb_jours = (date_fin - date_debut).days + 1
+        if conge.demi_jour:
+            nb_jours -= 0.5
+        jours_utilises += nb_jours
+
+    return jours_utilises
 class EmployeDashboardView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        
+        annee_courante = date.today().year
         # Récupérer les équipes auxquelles il appartient
         equipes = user.equipes_membre.all()
         
@@ -78,10 +99,20 @@ class EmployeDashboardView(APIView):
             jours_max_negatif = 0
 
         # Congés validés
-        conges_valides = DemandeConge.objects.filter(user=user, status='validé')
-        print("DEBUG: Congés validés:", conges_valides)
-        total_utilise = sum(
-        ((c.date_fin - c.date_debut).days + 1) - (0.5 if c.demi_jour else 0) for c in conges_valides)
+        conges_valides = DemandeConge.objects.filter(user=user, status='validé',date_fin__gte=date(annee_courante, 1, 1),date_debut__lte=date(annee_courante, 12, 31))
+        def calcul_jours_utilises_annee(conges, annee):
+            jours_utilises = 0
+            debut_annee = date(annee, 1, 1)
+            fin_annee = date(annee, 12, 31)
+            for c in conges:
+                debut = max(c.date_debut, debut_annee)
+                fin = min(c.date_fin, fin_annee)
+                jours = (fin - debut).days + 1
+                if c.demi_jour:
+                    jours -= 0.5
+                jours_utilises += jours
+            return jours_utilises
+        total_utilise = calcul_jours_utilises_annee(conges_valides, annee_courante)
 
 
         # Solde dynamique
@@ -190,31 +221,31 @@ class DemandeCongeValidationView(APIView):
         demande.save()
         return Response({"message": "Statut mis à jour"})
     def mettre_a_jour_solde(self, demande):
-        # Calculer la durée du congé
-        delta = demande.date_fin - demande.date_debut
-        jours_conges = delta.days + 1  # +1 pour inclure le dernier jour
-        
-        # Si c'est un demi-jour, compter comme 0.5 jour
-        if demande.demi_jour:
+       
+
+        annee_courante = date.today().year
+        debut = max(demande.date_debut, date(annee_courante, 1, 1))
+        fin = min(demande.date_fin, date(annee_courante, 12, 31))
+
+        jours_conges = (fin - debut).days + 1
+        if demande.demi_jour and demande.date_debut == demande.date_fin:
             jours_conges = 0.5
-        
-        # Récupérer ou créer le dernier historique de solde
+
+        # Dernier solde enregistré
         dernier_historique = HistoriqueSolde.objects.filter(user=demande.user).order_by('-date_modif').first()
         
         if dernier_historique:
             nouveau_solde = dernier_historique.solde_actuel - jours_conges
         else:
-            # Si pas d'historique, on part des jours acquis annuels
             regle = RegleCongé.objects.filter(equipe__membres=demande.user).first()
             jours_acquis = regle.jours_acquis_annuels if regle else 18
             nouveau_solde = jours_acquis - jours_conges
-        
-        # Créer un nouvel historique
+
         HistoriqueSolde.objects.create(
             user=demande.user,
-            solde_actuel=nouveau_solde
+            solde_actuel=nouveau_solde,
+            date_modif=date.today()
         )
-
 
 # Par défaut : 52 semaines * 5 jours - 18 jours - nb jours fériés
 def calculer_jours_ouvrables_annuels(nb_feries=10):

@@ -69,7 +69,7 @@ const AddEquipeModal: React.FC<AddEquipeModalProps> = ({ isOpen, onClose, onSucc
       [name]: value,
     }));
 
-    // Effacer l'erreur uniquement si elle existe
+    
     setErrors(prev => {
       if (prev[name]) {
         const newErrors = { ...prev };
@@ -80,7 +80,7 @@ const AddEquipeModal: React.FC<AddEquipeModalProps> = ({ isOpen, onClose, onSucc
     });
   }, []);
 
-  // Gestionnaire pour la sélection multiple des membres
+  // Gestionnaire pour la selection multiple des membres
   const handleMembresChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const values = Array.from(e.target.selectedOptions, (opt) => Number(opt.value));
     setFormData(prev => ({ ...prev, membres: values }));
@@ -95,7 +95,7 @@ const AddEquipeModal: React.FC<AddEquipeModalProps> = ({ isOpen, onClose, onSucc
     });
   }, []);
 
-  // Gestionnaire de soumission optimisé
+  // Gestionnaire de soumission optimise
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -112,13 +112,13 @@ const AddEquipeModal: React.FC<AddEquipeModalProps> = ({ isOpen, onClose, onSucc
       onSuccess();
       onClose();
     } catch (error) {
-      setErrors({ global: error instanceof Error ? error.message : 'Erreur lors de la création' });
+      setErrors({ global: error instanceof Error ? error.message : 'Erreur lors de la creation' });
     } finally {
       setLoading(false);
     }
   }, [formData, onSuccess, onClose]);
 
-  // Mémorisation des options pour éviter les re-rendus
+  
   const managerOptions = useMemo(() => (
     managers.map((mgr) => (
       <option key={mgr.id} value={mgr.id}>
