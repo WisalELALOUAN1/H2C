@@ -28,7 +28,7 @@ const SettingsView: React.FC = () => {
     confirm: false,
   })
 
-  // États pour la modification du profil
+  // Etats pour la modification du profil
   const [profile, setProfile] = useState({
     prenom: user?.prenom || "",
     nom: user?.nom || "",
@@ -38,17 +38,17 @@ const SettingsView: React.FC = () => {
   const [profileError, setProfileError] = useState("")
   const [profileLoading, setProfileLoading] = useState(false)
 
-  // États pour la modification du mot de passe
+  // Etats pour la modification du mot de passe
   const [passwords, setPasswords] = useState({ old: "", new: "", confirm: "" })
   const [passwordError, setPasswordError] = useState("")
   const [passwordSuccess, setPasswordSuccess] = useState("")
   const [passwordLoading, setPasswordLoading] = useState(false)
 
-  // États pour le test d'authentification
+  // Etats pour le test d'authentification
   const [testLoading, setTestLoading] = useState(false)
   const [testResult, setTestResult] = useState<any>(null)
 
-  // Synchroniser les champs du formulaire avec les données utilisateur
+  // Synchroniser les champs du formulaire avec data de  utilisateur
   useEffect(() => {
     if (user) {
       setProfile({
@@ -81,7 +81,7 @@ const SettingsView: React.FC = () => {
     return { strength: "strong", color: "green", text: "Fort" }
   }
 
-  // Vérifier la validité du token
+  // Verifier la validite  du token
   const checkTokenValidity = () => {
     const token = localStorage.getItem("accessToken")
     if (!token) {
@@ -99,11 +99,11 @@ const SettingsView: React.FC = () => {
     setProfileLoading(true)
 
     try {
-      // Mettre à jour le profil via l'API
+      // MAJ le profil via l'API
       const updatedData = await updateUserProfileApi(profile)
       console.log("Profil mis à jour avec succès:", updatedData)
 
-      // Mettre à jour le localStorage avec les nouvelles données
+      // MAJ le localStorage avec new data
       const currentUser = JSON.parse(localStorage.getItem("currentUser") || "{}")
       const updatedUser = {
         ...currentUser,
@@ -113,13 +113,13 @@ const SettingsView: React.FC = () => {
       }
       localStorage.setItem("currentUser", JSON.stringify(updatedUser))
 
-      // Rafraîchir les données utilisateur dans le contexte
+      // Rafraichir les donnees  utilisateur dans le contexte
       try {
         await refreshUser()
         console.log("Données utilisateur rafraîchies avec succès")
       } catch (refreshError) {
         console.warn("Impossible de rafraîchir les données utilisateur:", refreshError)
-        // Même si le refresh échoue, on peut continuer car la mise à jour a réussi
+        
       }
 
       setProfileSuccess("Profil mis à jour avec succès !")
@@ -132,13 +132,13 @@ const SettingsView: React.FC = () => {
     }
   }
 
-  // Modification du mot de passe
+  // Modification du password 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setPasswordSuccess("")
     setPasswordError("")
 
-    // Vérifications préliminaires
+    
     if (!checkTokenValidity()) {
       return
     }
@@ -168,7 +168,7 @@ const SettingsView: React.FC = () => {
     } catch (err: any) {
       console.error("Erreur lors du changement de mot de passe:", err)
 
-      // Gestion spécifique des erreurs d'authentification
+      
       if (err.message.includes("Session expirée") || err.message.includes("reconnecter")) {
         setPasswordError("Votre session a expiré. Vous allez être redirigé vers la page de connexion.")
         setTimeout(() => {
@@ -212,7 +212,7 @@ const SettingsView: React.FC = () => {
               </div>
             </div>
 
-            {/* User info badge - Affiche les données en temps réel */}
+            {/* User info badge - Affiche les donnees en temps reel */}
             <div className="mt-6 inline-flex items-center space-x-2 bg-white bg-opacity-10 rounded-full px-4 py-2">
               <div className="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
                 <UserCheck className="h-4 w-4 text-white" />
@@ -275,7 +275,7 @@ const SettingsView: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Messages d'état */}
+                  {/* Messages d'etat */}
                   {profileError && (
                     <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center">
                       <AlertCircle className="w-5 h-5 text-red-500 mr-3 flex-shrink-0" />
@@ -370,7 +370,7 @@ const SettingsView: React.FC = () => {
 
                   
 
-                  {/* Messages d'état */}
+                  {/* Messages d'etat */}
                   {passwordError && (
                     <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center">
                       <AlertCircle className="w-5 h-5 text-red-500 mr-3 flex-shrink-0" />
@@ -385,7 +385,7 @@ const SettingsView: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Vérification du token */}
+                  {/* Verification du token */}
                   <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
                     <div className="flex items-center space-x-2">
                       <Shield className="w-5 h-5 text-blue-600" />

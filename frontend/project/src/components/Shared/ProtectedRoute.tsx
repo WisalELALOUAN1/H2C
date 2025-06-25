@@ -8,8 +8,8 @@ const isAuthenticated = () => {
 };
 
 interface ProtectedRouteProps {
-  allowedRoles?: string[]; // Rôles autorisés (optionnel)
-  redirectPath?: string; // Chemin de redirection (optionnel, par défaut '/login')
+  allowedRoles?: string[]; // Roles autorises
+  redirectPath?: string; // Chemin de redirection 
 }
 
 
@@ -19,15 +19,15 @@ const ProtectedRoute = ({
   redirectPath = '/login' 
 }: ProtectedRouteProps) => {
   const location = useLocation();
-  const user = JSON.parse(localStorage.getItem('currentUser') || 'null'); // Récupère l'utilisateur
+  const user = JSON.parse(localStorage.getItem('currentUser') || 'null'); // recupere l'utilisateur
 
 
   if (!isAuthenticated()) {
-    // Redirection vers login avec l'emplacement précédent pour y retourner après connexion
+    // Redirection vers login avec l'emplacement precedent
     return <Navigate to={redirectPath} state={{ from: location }} replace />;
   }
 
-  // 2. Vérification des rôles 
+  // verifier le role
   if (allowedRoles && allowedRoles.length > 0) {
     const userRole = user?.role?.toLowerCase();
     const hasRequiredRole = allowedRoles.some(role => 
@@ -35,7 +35,7 @@ const ProtectedRoute = ({
     );
 
     if (!hasRequiredRole) {
-      // Redirection vers not-found si mauvais rôle
+      // Redirection vers not-found si mauvais role
       return <Navigate to="/not-found" replace />;
     }
   }
