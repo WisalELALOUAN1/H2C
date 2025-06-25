@@ -79,7 +79,7 @@ class EmployeImputationViewSet(viewsets.ModelViewSet):
             date__range=[start_date, end_date]
         )
         
-        # Vérifier si la semaine est déjà soumise
+        # Verifier si la semaine est deja soumise
         semaine_imputation = SemaineImputation.objects.filter(
             employe=request.user,
             semaine=week,
@@ -231,13 +231,13 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Semaines à valider
+        # Semaines a valider
         weeks_to_validate = SemaineImputation.objects.filter(
             employe__equipes_membre__in=managed_teams,
             statut='soumis'
         ).select_related('employe')
 
-        # Période courante (semaine en cours)
+        # Periode courante (semaine en cours)
         today = date.today()
         start_week = today - timedelta(days=today.weekday())
         end_week = start_week + timedelta(days=6)
@@ -279,7 +279,7 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
             by_project[project_name]['heures'] += float(imp.heures)
             by_project[project_name]['valeur'] += float(imp.heures) * float(imp.projet.taux_horaire)
 
-            # Charge par employé
+            # Charge par employe
             employee_name = f"{imp.employe.prenom} {imp.employe.nom}"
             by_employee[employee_name] = by_employee.get(employee_name, 0) + float(imp.heures)
 
@@ -306,7 +306,7 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
         week = get_object_or_404(SemaineImputation, pk=pk)
         managed_teams = self.get_managed_teams(request.user)
 
-        # Vérification des permissions
+        # Verification des permissions
         if not managed_teams.filter(membres=week.employe).exists():
             return Response(
                 {'error': 'Vous ne gérez pas cet employé'},
@@ -322,14 +322,14 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Mise à jour du statut
+        # MAJ du statut
         week.statut = 'valide' if action == 'valider' else 'rejete'
         week.date_validation = timezone.now()
         week.valide_par = request.user
         week.commentaire = comment if action == 'rejeter' else ''
         week.save()
 
-        # Si validation, marquer les imputations comme validées
+        # Si validation, marquer les imputations comme validees
         if action == 'valider':
             ImputationHoraire.objects.filter(
                 employe=week.employe,
@@ -357,7 +357,7 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Récupération des paramètres
+        # Parametress
         project_id = request.query_params.get('projet_id')
         start_date = request.query_params.get('date_debut')
         end_date = request.query_params.get('date_fin')
@@ -386,7 +386,7 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
         if start_date and end_date:
             imputations = imputations.filter(date__range=[start_date, end_date])
 
-        # Agrégation des données
+        # data
         report_data = []
         for imp in imputations:
             report_data.append({
@@ -401,7 +401,7 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
                 'valide': imp.valide
             })
 
-        # Gestion des différents formats
+        # Gestion des differents formats
         if report_format == 'csv':
             return self.generate_csv_report(report_data)
         elif report_format == 'pdf':
@@ -430,7 +430,7 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
         return response
 
     def generate_pdf_report(self, data):
-        """Génère un rapport PDF (implémentation simplifiée)"""
+        """Genere un rapport PDF (implémentation simplifiee)"""
         from django.http import HttpResponse
         from reportlab.pdfgen import canvas
         from io import BytesIO
@@ -438,12 +438,12 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
         pdf_buffer = BytesIO()
         p = canvas.Canvas(pdf_buffer)
 
-        # En-tête
+        # En-tete
         p.drawString(100, 800, "Rapport d'activité de l'équipe")
         
         # Contenu
         y_position = 780
-        for item in data[:50]:  # Limité à 50 lignes pour l'exemple
+        for item in data[:50]:  
             line = f"{item['date']} - {item['employe']}: {item['heures']}h sur {item['projet']}"
             p.drawString(100, y_position, line)
             y_position -= 15

@@ -48,7 +48,7 @@ class ReglesGlobauxRetrieveUpdateView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAdminUser]
 
     def get_object(self):
-        # Toujours retourner la 1re config (ou la crée si absente)
+        # Toujours retourner la 1ere config 
         obj, created = ReglesGlobaux.objects.get_or_create(pk=1)
         return obj
 
@@ -67,7 +67,7 @@ def get_jours_utilises_pour_annee(user, annee):
 
     jours_utilises = 0
     for conge in conges_valides:
-        # Découper la portion de congé qui tombe sur l’année courante
+        # Decouper la portion de conge qui tombe sur l’annee courante
         date_debut = max(conge.date_debut, debut_annee)
         date_fin = min(conge.date_fin, fin_annee)
         nb_jours = (date_fin - date_debut).days + 1
@@ -82,7 +82,7 @@ class EmployeDashboardView(APIView):
     def get(self, request):
         user = request.user
         annee_courante = date.today().year
-        # Récupérer les équipes auxquelles il appartient
+        # Get les equipes auxquelles il appartient
         equipes = user.equipes_membre.all()
         
         regle = None
@@ -99,7 +99,7 @@ class EmployeDashboardView(APIView):
             jours_ouvrables_annuels = 230
             jours_max_negatif = 0
 
-        # Congés validés
+        # Conges valides
         conges_valides = DemandeConge.objects.filter(user=user, status='validé',date_fin__gte=date(annee_courante, 1, 1),date_debut__lte=date(annee_courante, 12, 31))
         def calcul_jours_utilises_annee(conges, annee):
             jours_utilises = 0
@@ -151,14 +151,14 @@ class ManagerPendingRequestsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Vérifier le rôle
+        
         if request.user.role != "manager":
             return Response({"error": "Accès refusé"}, status=403)
 
-        # Récupérer les équipes dont l'utilisateur est manager
+        # les equipes dont l'utilisateur est manager
         equipes_manager = Equipe.objects.filter(manager=request.user)
         
-        # Récupérer les membres de ces équipes
+        #  les membres de ces equipes
         membres_ids = Utilisateur.objects.filter(
             equipes_membre__in=equipes_manager
         ).values_list('id', flat=True)
@@ -167,9 +167,9 @@ class ManagerPendingRequestsView(APIView):
         demandes = DemandeConge.objects.filter(
             user_id__in=membres_ids,
             status="en attente"
-        ).select_related('user')  # Optimisation pour éviter les requêtes N+1
+        ).select_related('user')  
 
-        # Sérialiser avec plus d'informations
+        # Serialiser avec plus d'informations
         data = []
         for demande in demandes:
             data.append({
@@ -187,7 +187,7 @@ class ManagerPendingRequestsView(APIView):
 
         return Response(data)
 
-        return Response(DemandeCongeSerializer(demandes, many=True).data)
+    
 class DemandeCongeRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = DemandeConge.objects.all()
     serializer_class = DemandeCongeSerializer
@@ -211,7 +211,7 @@ class DemandeCongeValidationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, demande_id):
-        status = request.data.get("status")  # "validé" ou "refusé"
+        status = request.data.get("status")  
         commentaire = request.data.get("commentaire")
         try:
             demande = DemandeConge.objects.get(id=demande_id)
@@ -232,7 +232,7 @@ class DemandeCongeValidationView(APIView):
         if demande.demi_jour and demande.date_debut == demande.date_fin:
             jours_conges = 0.5
 
-        # Dernier solde enregistré
+        # Dernier solde enregistre
         dernier_historique = HistoriqueSolde.objects.filter(user=demande.user).order_by('-date_modif').first()
         
         if dernier_historique:
@@ -248,7 +248,7 @@ class DemandeCongeValidationView(APIView):
             date_modif=date.today()
         )
 
-# Par défaut : 52 semaines * 5 jours - 18 jours - nb jours fériés
+# Par defaut : 52 semaines * 5 jours - 18 jours - nb jours feries
 def calculer_jours_ouvrables_annuels(nb_feries=10):
     return (52*5) - 18 - nb_feries
 
@@ -265,7 +265,7 @@ class HolidayAPIView(APIView):
         try:
             holidays_list = []
             
-            # Ajouter les jours fériés fixes pour les pays spécifiques
+            # Ajouter les jours feriés fixes pour les pays specifiques
             if country_code == 'MA':  # Maroc
                 holidays_list.extend([
                     {'date': f'{year}-01-01', 'name': 'Nouvel An', 'fixed': True},
@@ -278,7 +278,7 @@ class HolidayAPIView(APIView):
                     {'date': f'{year}-11-06', 'name': "Anniversaire de la Marche verte", 'fixed': True},
                     {'date': f'{year}-11-18', 'name': "Fête de l'Indépendance", 'fixed': True}
                 ])
-            elif country_code == 'DZ':  # Algérie
+            elif country_code == 'DZ':  # Algerie
                 holidays_list.extend([
                     {'date': f'{year}-01-01', 'name': "Jour de l'an", 'fixed': True},
                     {'date': f'{year}-01-12', 'name': "Yennayer (Nouvel an berbère)", 'fixed': True},
@@ -287,7 +287,7 @@ class HolidayAPIView(APIView):
                     {'date': f'{year}-11-01', 'name': "Fête de la Révolution", 'fixed': True}
                 ])
             
-            # Ajouter les jours fériés de la bibliothèque holidays
+            # Ajouter les jours feries de la bibliotheque holidays
             try:
                 if country_code in ['MA', 'DZ', 'TN']:
                     country_holidays = holidays.CountryHoliday(
@@ -300,7 +300,7 @@ class HolidayAPIView(APIView):
                 
                 for date_obj, name in sorted(country_holidays.items()):
                     holiday_date = date_obj.isoformat()
-                    # Éviter les doublons
+                    # eviter les doublons
                     if not any(h['date'] == holiday_date for h in holidays_list):
                         holidays_list.append({
                             'date': holiday_date,
@@ -308,7 +308,7 @@ class HolidayAPIView(APIView):
                             'fixed': True
                         })
             except Exception as e:
-                # Si la bibliothèque holidays ne supporte pas ce pays, on continue avec nos jours fixes
+                # Si la bibliotheque holidays ne supporte pas ce pays, on continue avec nos jours fixes
                 pass
             
             return JsonResponse(holidays_list, safe=False)
@@ -338,7 +338,7 @@ class RegleMembreViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, EstManagerEquipe]
 
     def get_queryset(self):
-        # Filtre par équipes managées par l'utilisateur
+        # Filtre par equipes managees par l'utilisateur
         return self.queryset.filter(
             regle_equipe__manager=self.request.user
         )
@@ -357,7 +357,7 @@ class DemandeCongeViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Un manager voit les demandes de ses équipes
+        # Un manager voit les demandes de ses equipes
         if self.request.user.role == 'manager':
             equipes = self.request.user.equipes_manager.all()
             membres_ids = Equipe.objects.filter(
@@ -365,7 +365,7 @@ class DemandeCongeViewSet(viewsets.ModelViewSet):
             ).values_list('membres__id', flat=True)
             return self.queryset.filter(user_id__in=membres_ids)
         
-        # Un employé ne voit que ses propres demandes
+        # Un employe ne voit que ses propres demandes
         return self.queryset.filter(user=self.request.user)
 
 class DashboardManagerView(generics.GenericAPIView):
@@ -375,7 +375,7 @@ class DashboardManagerView(generics.GenericAPIView):
     def get(self, request):
         equipes = request.user.equipes_manager.all()
         
-        # Statistiques des équipes
+        # Statistiques desequipes
         equipe_stats = []
         for equipe in equipes:
             membres_count = equipe.membres.count()
@@ -391,7 +391,7 @@ class DashboardManagerView(generics.GenericAPIView):
                 'demandes_en_attente': demandes_en_attente
             })
         
-        # Récupérer les dernières demandes en attente
+        # Recuprer les dernieres demandes en attente
         derniers_demandes = DemandeConge.objects.filter(
             user__in=Equipe.objects.filter(
                 manager=request.user
@@ -411,7 +411,7 @@ class ValiderDemandeCongeView(generics.GenericAPIView):
     def post(self, request, demande_id):
         demande = get_object_or_404(DemandeConge, id=demande_id)
         
-        # Vérifier que le manager gère bien ce membre
+        # Verifier que le manager gere bien ce membre
         if not request.user.equipes_manager.filter(
             membres__id=demande.user.id
         ).exists():
@@ -444,7 +444,7 @@ class RegleCongeViewSet(viewsets.ModelViewSet):
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
-        context['request'] = self.request  # nécessaire pour SerializerMethodField
+        context['request'] = self.request  
         return context
 
     def get_formule(self):
@@ -480,13 +480,13 @@ class RegleCongeViewSet(viewsets.ModelViewSet):
 
         jours_ouvrables_annuels = self.calculer_jours_ouvrables(jours_acquis)
         nbr_max_negatif = self.request.data.get('nbr_max_negatif', 0)
-        # Calcul dynamique, non stocké
+        # Calcul dynamique, non stocke
         try:
             jours_travailles = int(self.request.data.get('jours_travailles', 230))
         except (TypeError, ValueError):
             jours_travailles = 230
 
-        # Tu peux utiliser cette valeur si tu souhaites la stocker
+        
         jours_conges_acquis = calculer_conges_acquis(jours_travailles, jours_ouvrables_annuels)
 
         serializer.save(
@@ -496,7 +496,7 @@ class RegleCongeViewSet(viewsets.ModelViewSet):
             jours_acquis_annuels=jours_acquis,
             jours_ouvrables_annuels=jours_ouvrables_annuels,
             nbr_max_negatif=nbr_max_negatif,
-            # jours_conges_acquis=jours_conges_acquis  # Optionnel si tu as ce champ en base
+            
         )
 
     def perform_update(self, serializer):
@@ -529,7 +529,7 @@ class RegleCongeViewSet(viewsets.ModelViewSet):
 
 def eval_expression(expression: str, context: dict):
     try:
-        # Attention à la sécurité ! Ne jamais eval avec un input utilisateur non sécurisé en prod
+        
         return eval(expression, {}, context)
     except Exception as e:
         raise ValueError(f"Erreur évaluation expression '{expression}': {e}")
@@ -551,31 +551,31 @@ class CalendarDataView(APIView):
     
     def get(self, request):
         try:
-            # 1. Valider les paramètres de requête
+            # 1. Valider les parametres de requête
             year = int(request.GET.get('year', datetime.now().year))
             month = int(request.GET.get('month', datetime.now().month))
             
             if not (1 <= month <= 12):
                 raise ValueError("Le mois doit être entre 1 et 12")
             
-            # 2. Calculer la période
+            # 2. Calculer la periode
             start_date = date(year, month, 1)
             last_day = calendar.monthrange(year, month)[1]
             end_date = date(year, month, last_day)
             
             logger.info(f"Fetching calendar data for user {request.user.id} - {year}-{month}")
 
-            # 3. Récupérer les congés de l'utilisateur
+            # 3. les conges de l'utilisateur
             user_leaves = DemandeConge.objects.filter(
                 user=request.user,
                 date_debut__lte=end_date,
                 date_fin__gte=start_date
             ).select_related('user').order_by('date_debut')
 
-            # 4. Récupérer les congés de l'équipe (méthode optimisée)
+            # 4. les conges de l'equipe (methode optimisee)
             team_leaves = DemandeConge.objects.none()  # Par défaut vide
             
-            # Vérifier d'abord si l'utilisateur appartient à des équipes
+            # Verifier d'abord si l'utilisateur appartient a des équipes
             user_teams = request.user.equipes_membre.all()
             if user_teams.exists():
                 team_members = Utilisateur.objects.filter(
@@ -590,10 +590,10 @@ class CalendarDataView(APIView):
 
             logger.info(f"Found {user_leaves.count()} user leaves and {team_leaves.count()} team leaves")
 
-            # 5. Récupérer les jours fériés
+            # 5. les jours fériés
             holidays_data = self.get_holidays(year, month)
             
-            # 6. Formater la réponse
+            # 6. Formater la reponse
             def build_leave_data(leave, is_team=False):
                 leave_days = []
                 current_date = max(leave.date_debut, start_date)
@@ -623,7 +623,7 @@ class CalendarDataView(APIView):
                 
                 return leave_days
 
-            # Séparer les congés validés/en attente
+            # Separer les conges valides/en attente
             approved_leaves = []
             pending_leaves = []
             
@@ -633,7 +633,7 @@ class CalendarDataView(APIView):
                 else:
                     approved_leaves.extend(build_leave_data(leave))
             
-            # Congés de l'équipe
+            # Conges de l'equipe
             team_leave_days = []
             for leave in team_leaves:
                 team_leave_days.extend(build_leave_data(leave, True))
@@ -695,7 +695,7 @@ class CalendarDataView(APIView):
                 except Exception as e:
                     logger.error(f"Erreur avec la lib holidays: {e}")
 
-            # Jours fériés personnalisés
+            # Jours feriee personnalises
             if regles.jours_feries:
                 for ferier in regles.jours_feries:
                     try:
@@ -803,10 +803,10 @@ class SoldeView(APIView):
         try:
             user = request.user
             
-            # 1. Récupération du solde actuel
+            # 1.  solde actuel
             solde_actuel = self.get_current_solde(user)
             
-            # 2. Calcul des congés pris ce mois
+            # 2. Calcul des conges pris ce mois
             today = date.today()
             first_day = date(today.year, today.month, 1)
             last_day = date(today.year, today.month + 1, 1) - timedelta(days=1)
@@ -824,7 +824,7 @@ class SoldeView(APIView):
                 end = min(conge.date_fin, last_day)
                 jours_conges += (end - start).days + 1
             
-            # 3. Récupération des règles
+            # 3.  des règles
             regles = self.get_regles_conge(user)
             print('------------------solde_actuel', solde_actuel.get('solde', 0))
                 
@@ -853,7 +853,7 @@ class SoldeView(APIView):
 
     def get_regles_conge(self, user):
         try:
-            # Utilisation de equipes_membre au lieu de equipes_appartenance
+            
             equipe = user.equipes_membre.first()
             if equipe:
                 regle = RegleCongé.objects.filter(equipe=equipe).first()
