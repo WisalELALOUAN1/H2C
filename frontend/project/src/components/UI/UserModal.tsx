@@ -10,7 +10,7 @@ interface UserModalProps {
   onClose: () => void;
   onSubmit: (userData: UserFormData) => void;
   user?: User | null;
-  errors?: { [key: string]: string }; // <--- ajout ici
+  errors?: { [key: string]: string };
 }
 
 const UserModal: React.FC<UserModalProps> = ({
@@ -55,8 +55,7 @@ const UserModal: React.FC<UserModalProps> = ({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Optionnel : efface l'erreur sur ce champ à la frappe
-    // if (errors[name]) { setErrors(prev => ({ ...prev, [name]: undefined })); }
+    
   };
 
   if (!isOpen) return null;

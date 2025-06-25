@@ -1,7 +1,7 @@
 import axios from "axios"
 import type { GlobalRules, User, EquipeFormData, Equipe ,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,ManagerDashboardData} from "../types"
 
-const API_BASE_URL = "http://localhost:8000" // Sans /api car tes routes sont du type /auth/login/
+const API_BASE_URL = "http://localhost:8000" 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -650,12 +650,12 @@ export const changePasswordApi = async (oldPassword: string, newPassword: string
     console.log("3. Token (début):", token?.substring(0, 30) + "...")
     console.log("4. URL cible:", `${API_BASE_URL}/auth/user/change-password/`)
 
-    // Vérifier que le token existe
+    // Verifier que le token existe
     if (!token) {
       throw new Error("Session expirée. Veuillez vous reconnecter.")
     }
 
-    // Test d'authentification préalable
+    // Test d'authentification 
     console.log("5. Test d'authentification préalable...")
     const authTest = await testAuthenticationApi()
     console.log("6. Résultat du test auth:", authTest)
@@ -688,13 +688,13 @@ export const changePasswordApi = async (oldPassword: string, newPassword: string
 
     // Gérer spécifiquement l'erreur 401
     if (response.status === 401) {
-      console.error("❌ ERREUR 401 - Token invalide ou expiré")
+      console.error(" ERREUR 401 - Token invalide ou expiré")
 
-      // Essayer de récupérer plus d'infos sur l'erreur
+      // Essayer de recuperer plus d'infos sur l'erreur
       const errorText = await response.text()
       console.error("11. Détails de l'erreur 401:", errorText)
 
-      // Token expiré ou invalide
+      // Token expire ou invalide
       localStorage.removeItem("accessToken")
       localStorage.removeItem("refreshToken")
       localStorage.removeItem("currentUser")
@@ -723,10 +723,10 @@ export const changePasswordApi = async (oldPassword: string, newPassword: string
       throw new Error(data.error || data.detail || "Erreur lors du changement de mot de passe")
     }
 
-    console.log("✅ Changement de mot de passe réussi!")
+    console.log("Changement de mot de passe réussi!")
     return data
   } catch (error) {
-    console.error("❌ Erreur lors du changement de mot de passe:", error)
+    console.error(" Erreur lors du changement de mot de passe:", error)
     throw new Error(error instanceof Error ? error.message : String(error))
   }
 }
