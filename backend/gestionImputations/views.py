@@ -205,176 +205,259 @@ class EmployeImputationViewSet(viewsets.ModelViewSet):
             'periode': f"{date_debut} - {date_fin}"
         })
 class ManagerDashboardViewSet(viewsets.ViewSet):
+    """
+    ViewSet pour le tableau de bord manager avec :
+    - Vue consolidée des indicateurs
+    - Validation des semaines
+    - Génération de rapports
+    """
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_managed_teams(self, user):
+        """Récupère les équipes gérées par le manager"""
+        if user.role != 'manager':
+            return Equipe.objects.none()
+        return Equipe.objects.filter(manager=user)
+
     def list(self, request):
-        """Tableau de bord manager avec vue consolidée"""
-        if request.user.role != 'manager':
-            return Response(
-                {'error': 'Accès réservé aux managers'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        # Récupérer les équipes gérées
-        equipes = Equipe.objects.filter(manager=request.user)
-        
-        if not equipes.exists():
+        """
+        Endpoint: GET /api/manager/dashboard/
+        Retourne les données consolidées pour le tableau de bord manager
+        """
+        managed_teams = self.get_managed_teams(request.user)
+        if not managed_teams.exists():
             return Response(
                 {'error': 'Vous ne gérez aucune équipe'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # Semaines à valider
-        semaines_a_valider = SemaineImputation.objects.filter(
-            employe__equipes_membre__in=equipes,
+        weeks_to_validate = SemaineImputation.objects.filter(
+            employe__equipes_membre__in=managed_teams,
             statut='soumis'
         ).select_related('employe')
-        
-        # Calcul des indicateurs
+
+        # Période courante (semaine en cours)
         today = date.today()
-        date_debut_semaine = today - timedelta(days=today.weekday())
-        date_fin_semaine = date_debut_semaine + timedelta(days=6)
-        
-        # Charge par projet
-        imputations = ImputationHoraire.objects.filter(
-            employe__equipes_membre__in=equipes,
-            date__range=[date_debut_semaine, date_fin_semaine]
-        ).select_related('projet', 'employe')
-        
-        charge_par_projet = {}
-        charge_par_employe = {}
-        
-        for imputation in imputations:
-            # Par projet
-            projet = imputation.projet.nom
-            if projet not in charge_par_projet:
-                charge_par_projet[projet] = {
-                    'heures': 0,
-                    'taux': imputation.projet.taux_horaire,
-                    'valeur': 0
-                }
-            charge_par_projet[projet]['heures'] += float(imputation.heures)
-            charge_par_projet[projet]['valeur'] += float(imputation.heures) * imputation.projet.taux_horaire
-            
-            # Par employé
-            employe = f"{imputation.employe.prenom} {imputation.employe.nom}"
-            if employe not in charge_par_employe:
-                charge_par_employe[employe] = 0
-            charge_par_employe[employe] += float(imputation.heures)
-        
-        # Projets en retard
-        projets_en_retard = Projet.objects.filter(
-            equipe__in=equipes,
-            date_fin__lt=today,
-            actif=True
-        ).count()
-        
+        start_week = today - timedelta(days=today.weekday())
+        end_week = start_week + timedelta(days=6)
+
+        # Calcul des indicateurs
+        workload_data = self.calculate_workload(managed_teams, start_week, end_week)
+        late_projects = self.get_late_projects(managed_teams)
+
         return Response({
-            'semaines_a_valider': SemaineImputationSerializer(semaines_a_valider, many=True).data,
-            'charge_par_projet': charge_par_projet,
-            'charge_par_employe': charge_par_employe,
-            'projets_en_retard': projets_en_retard,
-            'periode': f"{date_debut_semaine} - {date_fin_semaine}"
+            'semaines_a_valider': SemaineImputationSerializer(weeks_to_validate, many=True).data,
+            'charge_par_projet': workload_data['by_project'],
+            'charge_par_employe': workload_data['by_employee'],
+            'projets_en_retard': late_projects,
+            'periode': f"{start_week} - {end_week}",
+            'equipes': [{'id': team.id, 'nom': team.nom} for team in managed_teams]
         })
 
-    @action(detail=True, methods=['post'])
-    def valider_semaine(self, request, pk=None):
-        """Valider ou rejeter une semaine d'imputation"""
-        semaine = get_object_or_404(SemaineImputation, pk=pk)
-        
-        # Vérifier que le manager gère bien cet employé
-        if not Equipe.objects.filter(
-            manager=request.user,
-            membres=semaine.employe
-        ).exists():
+    def calculate_workload(self, teams, start_date, end_date):
+        """
+        Calcule la charge de travail par projet et par employé
+        """
+        imputations = ImputationHoraire.objects.filter(
+            employe__equipes_membre__in=teams,
+            date__range=[start_date, end_date]
+        ).select_related('projet', 'employe')
+
+        by_project = {}
+        by_employee = {}
+
+        for imp in imputations:
+            # Charge par projet
+            project_name = imp.projet.nom
+            if project_name not in by_project:
+                by_project[project_name] = {
+                    'heures': 0,
+                    'taux': float(imp.projet.taux_horaire),
+                    'valeur': 0
+                }
+            by_project[project_name]['heures'] += float(imp.heures)
+            by_project[project_name]['valeur'] += float(imp.heures) * float(imp.projet.taux_horaire)
+
+            # Charge par employé
+            employee_name = f"{imp.employe.prenom} {imp.employe.nom}"
+            by_employee[employee_name] = by_employee.get(employee_name, 0) + float(imp.heures)
+
+        return {
+            'by_project': by_project,
+            'by_employee': by_employee
+        }
+
+    def get_late_projects(self, teams):
+        """Compte les projets en retard pour les équipes gérées"""
+        return Projet.objects.filter(
+            equipe__in=teams,
+            date_fin__lt=date.today(),
+            actif=True
+        ).count()
+
+    @action(detail=True, methods=['post'], url_path='valider-semaine')
+    def validate_week(self, request, pk=None):
+        """
+        Endpoint: POST /api/manager/dashboard/<id>/valider-semaine/
+        Valide ou rejette une semaine d'imputation
+        Body: { "action": "valider"|"rejeter", "commentaire": "" }
+        """
+        week = get_object_or_404(SemaineImputation, pk=pk)
+        managed_teams = self.get_managed_teams(request.user)
+
+        # Vérification des permissions
+        if not managed_teams.filter(membres=week.employe).exists():
             return Response(
                 {'error': 'Vous ne gérez pas cet employé'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         action = request.data.get('action')
-        commentaire = request.data.get('commentaire', '')
-        
-        if action == 'valider':
-            semaine.statut = 'valide'
-            semaine.date_validation = timezone.now()
-            semaine.valide_par = request.user
-            
-            # Valider toutes les imputations de la semaine
-            ImputationHoraire.objects.filter(
-                employe=semaine.employe,
-                date__week=semaine.semaine,
-                date__year=semaine.annee
-            ).update(valide=True)
-            
-        elif action == 'rejeter':
-            semaine.statut = 'rejete'
-            semaine.date_validation = timezone.now()
-            semaine.valide_par = request.user
-            semaine.commentaire = commentaire
-        else:
+        comment = request.data.get('commentaire', '')
+
+        if action not in ['valider', 'rejeter']:
             return Response(
                 {'error': 'Action invalide. Doit être "valider" ou "rejeter"'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        semaine.save()
-        return Response(SemaineImputationSerializer(semaine).data)
 
-    @action(detail=False, methods=['get'])
+        # Mise à jour du statut
+        week.statut = 'valide' if action == 'valider' else 'rejete'
+        week.date_validation = timezone.now()
+        week.valide_par = request.user
+        week.commentaire = comment if action == 'rejeter' else ''
+        week.save()
+
+        # Si validation, marquer les imputations comme validées
+        if action == 'valider':
+            ImputationHoraire.objects.filter(
+                employe=week.employe,
+                date__week=week.semaine,
+                date__year=week.annee
+            ).update(valide=True)
+
+        return Response(SemaineImputationSerializer(week).data)
+
+    
     def reporting(self, request):
-        """Génération de rapports"""
-        equipes = Equipe.objects.filter(manager=request.user)
-        
-        # Filtres
-        projet_id = request.query_params.get('projet')
-        date_debut = request.query_params.get('date_debut')
-        date_fin = request.query_params.get('date_fin')
-        format = request.query_params.get('format', 'json')
-        
+        """
+        Endpoint: GET /api/manager/dashboard/reporting/
+        Génère un rapport consolidé avec filtres
+        Paramètres:
+        - date_debut (YYYY-MM-DD)
+        - date_fin (YYYY-MM-DD)
+        - projet_id (int)
+        - format (json|csv|pdf)
+        """
+        managed_teams = self.get_managed_teams(request.user)
+        if not managed_teams.exists():
+            return Response(
+                {'error': 'Vous ne gérez aucune équipe'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Récupération des paramètres
+        project_id = request.query_params.get('projet_id')
+        start_date = request.query_params.get('date_debut')
+        end_date = request.query_params.get('date_fin')
+        report_format = request.query_params.get('format', 'json')
+
         # Validation des dates
         try:
-            if date_debut:
-                date_debut = parser.parse(date_debut).date()
-            if date_fin:
-                date_fin = parser.parse(date_fin).date()
+            if start_date:
+                start_date = parser.parse(start_date).date()
+            if end_date:
+                end_date = parser.parse(end_date).date()
         except ValueError:
             return Response(
                 {'error': 'Format de date invalide. Utiliser YYYY-MM-DD'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Construction du queryset
+
+        # Construction du queryset de base
         imputations = ImputationHoraire.objects.filter(
-            employe__equipes_membre__in=equipes
+            employe__equipes_membre__in=managed_teams
         ).select_related('projet', 'employe')
-        
-        if projet_id:
-            imputations = imputations.filter(projet__id=projet_id)
-        
-        if date_debut and date_fin:
-            imputations = imputations.filter(date__range=[date_debut, date_fin])
-        
+
+        # Application des filtres
+        if project_id:
+            imputations = imputations.filter(projet__id=project_id)
+        if start_date and end_date:
+            imputations = imputations.filter(date__range=[start_date, end_date])
+
         # Agrégation des données
-        data = []
-        for imputation in imputations:
-            data.append({
-                'date': imputation.date,
-                'employe': f"{imputation.employe.prenom} {imputation.employe.nom}",
-                'projet': imputation.projet.nom,
-                'heures': float(imputation.heures),
-                'categorie': imputation.categorie,
-                'valeur': float(imputation.heures) * imputation.projet.taux_horaire
+        report_data = []
+        for imp in imputations:
+            report_data.append({
+                'date': imp.date.isoformat(),
+                'employe': f"{imp.employe.prenom} {imp.employe.nom}",
+                'employe_id': imp.employe.id,
+                'projet': imp.projet.nom,
+                'projet_id': imp.projet.id,
+                'heures': float(imp.heures),
+                'categorie': imp.categorie,
+                'valeur': float(imp.heures) * float(imp.projet.taux_horaire),
+                'valide': imp.valide
             })
+
+        # Gestion des différents formats
+        if report_format == 'csv':
+            return self.generate_csv_report(report_data)
+        elif report_format == 'pdf':
+            return self.generate_pdf_report(report_data)
         
-        if format == 'csv':
-            # Implémenter la génération CSV ici
-            pass
-        elif format == 'pdf':
-            # Implémenter la génération PDF ici
-            pass
+        # Format JSON par défaut
+        return Response({
+            'data': report_data,
+            'total': len(report_data),
+            'periode': f"{start_date} - {end_date}" if start_date and end_date else 'Toutes périodes'
+        })
+
+    def generate_csv_report(self, data):
+        """Génère un rapport CSV (implémentation simplifiée)"""
+        import csv
+        from django.http import HttpResponse
+        from io import StringIO
+
+        csv_buffer = StringIO()
+        writer = csv.DictWriter(csv_buffer, fieldnames=data[0].keys())
+        writer.writeheader()
+        writer.writerows(data)
+
+        response = HttpResponse(csv_buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename=rapport_equipe.csv'
+        return response
+
+    def generate_pdf_report(self, data):
+        """Génère un rapport PDF (implémentation simplifiée)"""
+        from django.http import HttpResponse
+        from reportlab.pdfgen import canvas
+        from io import BytesIO
+
+        pdf_buffer = BytesIO()
+        p = canvas.Canvas(pdf_buffer)
+
+        # En-tête
+        p.drawString(100, 800, "Rapport d'activité de l'équipe")
         
-        return Response(data)
+        # Contenu
+        y_position = 780
+        for item in data[:50]:  # Limité à 50 lignes pour l'exemple
+            line = f"{item['date']} - {item['employe']}: {item['heures']}h sur {item['projet']}"
+            p.drawString(100, y_position, line)
+            y_position -= 15
+            if y_position < 50:
+                p.showPage()
+                y_position = 780
+
+        p.save()
+        pdf_value = pdf_buffer.getvalue()
+        pdf_buffer.close()
+
+        response = HttpResponse(pdf_value, content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename=rapport_equipe.pdf'
+        return response
 class SemaineCouranteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 

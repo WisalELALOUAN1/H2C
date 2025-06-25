@@ -1,12 +1,23 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from . import views
+from .views import (
+    ProjectViewSet,
+    ManagerImputationViewSet,
+    EmployeImputationViewSet,
+    ManagerDashboardViewSet,
+    SemaineCouranteView,
+    SyntheseMensuelleView
+)
 
 router = DefaultRouter()
-router.register(r'employe/imputations', views.EmployeImputationViewSet, basename='employe-imputation')
-router.register(r'manager/dashboard', views.ManagerDashboardViewSet, basename='manager-dashboard')
+router.register(r'projets', ProjectViewSet, basename='projet')
+router.register(r'manager/imputations', ManagerImputationViewSet, basename='manager-imputation')
+router.register(r'employe/imputations', EmployeImputationViewSet, basename='employe-imputation')
+router.register(r'manager/dashboard', ManagerDashboardViewSet, basename='manager-dashboard')
 
 urlpatterns = [
-    path('employe/imputations/semaine_courante/', views.SemaineCouranteView.as_view(), name='semaine_courante'),
-    path('employe/imputations/synthese_mensuelle/', views.SyntheseMensuelleView.as_view(), name='synthese_mensuelle'),
+    path('', include(router.urls)),
+    path('semaine_courante/', SemaineCouranteView.as_view(), name='semaine-courante'),
+    path('synthese_mensuelle/', SyntheseMensuelleView.as_view(), name='synthese-mensuelle'),
+    path('manager/reporting/', ManagerDashboardViewSet.as_view({'get': 'reporting'}), name='manager-reporting'),
 ]

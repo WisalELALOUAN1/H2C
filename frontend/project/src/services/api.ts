@@ -1,5 +1,5 @@
 import axios from "axios"
-import type { GlobalRules, User, EquipeFormData, Equipe ,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation} from "../types"
+import type { GlobalRules, User, EquipeFormData, Equipe ,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,ManagerDashboardData} from "../types"
 
 const API_BASE_URL = "http://localhost:8000" // Sans /api car tes routes sont du type /auth/login/
 const api = axios.create({
@@ -982,4 +982,96 @@ export const getCurrentSolde = async (): Promise<EmployeeCurrentSolde> => {
   });
   console.log(response.data)
   return response.data;
+};
+
+export const getManagerDashboard = async (): Promise<ManagerDashboardData> => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/gestion-imputations-projet/manager/dashboard/`, 
+      { headers: getAuthHeaders() }
+    );
+    
+    return {
+      semaines_a_valider: response.data.semaines_a_valider || [],
+      charge_par_projet: response.data.charge_par_projet || {},
+      charge_par_employe: response.data.charge_par_employe || {},
+      projets_en_retard: response.data.projets_en_retard || 0,
+      periode: response.data.periode || '',
+      equipes: response.data.equipes || []
+    };
+  } catch (error) {
+    console.error('Error fetching manager dashboard:', error);
+    throw new Error('Erreur lors de la récupération des données du tableau de bord');
+  }
+};
+
+/**
+ * Valide ou rejette une semaine d'imputation
+ */
+export const validateWeek = async (
+  weekId: number,
+  action: 'valider' | 'rejeter',
+  comment = ''
+): Promise<void> => {
+  try {
+    await axios.post(
+      `${API_BASE_URL}/gestion-imputations-projet/manager/semaines/${weekId}/valider/`,
+      { action, commentaire: comment },
+      { headers: getAuthHeaders() }
+    );
+  } catch (error) {
+    console.error('Error validating week:', error);
+    throw new Error(`Erreur lors de ${action === 'valider' ? 'la validation' : 'du rejet'} de la semaine`);
+  }
+};
+
+/**
+ * Génère un rapport d'équipe
+ */
+export const getTeamReport = async (params: ReportParams): Promise<ReportData> => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/gestion-imputations-projet/manager/reporting/`,
+      {
+        params: {
+          date_debut: params.dateDebut,
+          date_fin: params.dateFin,
+          projet_id: params.projetId,
+          format: params.format
+        },
+        headers: getAuthHeaders()
+      }
+    );
+
+    // Gestion des différents formats
+    switch (params.format) {
+      case 'csv':
+        return {
+          downloadUrl: response.data.download_url,
+          data: response.data
+        };
+      case 'pdf':
+        return {
+          downloadUrl: response.data.download_url,
+          data: response.data
+        };
+      default:
+        return response.data;
+    }
+  } catch (error) {
+    console.error('Error generating team report:', error);
+    throw new Error('Erreur lors de la génération du rapport');
+  }
+};
+
+/**
+ * Télécharge un fichier
+ */
+export const downloadReportFile = (url: string, filename: string) => {
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename || 'rapport_equipe';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
 };

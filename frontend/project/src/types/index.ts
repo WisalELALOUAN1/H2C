@@ -222,3 +222,48 @@ export interface MonthlySummary {
   total_valeur: number;
   periode: string;
 }
+export interface ReportParams {
+  dateDebut?: string;
+  dateFin?: string;
+  projetId?: string;
+  format?: 'json' | 'csv' | 'pdf';
+}
+
+export interface ReportData {
+  [key: string]: any; // Structure flexible selon le rapport
+}
+interface WeekToValidate {
+  id: number;
+  semaine: number;
+  annee: number;
+  total_heures: number;
+  statut: 'brouillon' | 'soumis' | 'valide' | 'rejete';
+  employe: {
+    id: number;
+    prenom: string;
+    nom: string;
+  };
+}
+
+interface ProjectWorkload {
+  [key: string]: {
+    heures: number;
+    taux: number;
+    valeur: number;
+  };
+}
+
+interface EmployeeWorkload {
+  [key: string]: number;
+}
+export interface ManagerDashboardData {
+  semaines_a_valider: WeekToValidate[];
+  charge_par_projet: ProjectWorkload;
+  charge_par_employe: EmployeeWorkload;
+  projets_en_retard: number;
+  periode: string;
+  equipes: Array<{
+    id: number;
+    nom: string;
+  }>;
+}
