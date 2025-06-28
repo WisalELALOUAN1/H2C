@@ -1,5 +1,5 @@
 import axios from "axios"
-import type { GlobalRules, User, EquipeFormData, Equipe ,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,ManagerDashboardData} from "../types"
+import type { GlobalRules, User, EquipeFormData, Equipe ,ProjetFormData,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,ManagerDashboardData,Projet} from "../types"
 
 const API_BASE_URL = "http://localhost:8000" 
 const api = axios.create({
@@ -8,19 +8,30 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 })
-api.interceptors.response.use(
-  response => response,
-  error => {
+api.interceptors.response.use(response => response, error => {
     if (error.response?.status === 401) {
-      // Supprimer les tokens et rediriger vers login
-      localStorage.removeItem("accessToken")
-      localStorage.removeItem("refreshToken")
-      localStorage.removeItem("currentUser")
-      window.location.href = "/login"
+        // Gestion plus robuste du refresh token
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (refreshToken && window.location.pathname !== '/login') {
+            return api.post('/auth/token/refresh/', { refresh: refreshToken })
+                .then(response => {
+                    localStorage.setItem('accessToken', response.data.access);
+                    error.config.headers.Authorization = `Bearer ${response.data.access}`;
+                    return api.request(error.config);
+                })
+                .catch(() => {
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
+                    window.location.href = '/login';
+                });
+        } else {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            window.location.href = '/login';
+        }
     }
-    return Promise.reject(error)
-  }
-)
+    return Promise.reject(error);
+});
 
 // Helper function to get auth headers
 const getAuthHeaders = () => {
@@ -1074,4 +1085,84 @@ export const downloadReportFile = (url: string, filename: string) => {
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
+};
+
+// Gestion des projets
+export const fetchEquipesDisponibles = async (): Promise<Equipe[]> => {
+    try {
+        const response = await api.get('/gestion-imputations-projet/projets/equipes_disponibles/');
+        return response.data;
+    } catch (error) {
+        console.error('Error fetching equipes:', error);
+        throw new Error('Impossible de charger la liste des équipes');
+    }
+};
+
+export const createProject = async (projectData: ProjetFormData): Promise<Projet> => {
+    try {
+        const response = await api.post('/gestion-imputations-projet/projets/', projectData);
+        return response.data;
+    } catch (error) {
+        const err = error as any;
+        console.error('Error creating project:', err.response?.data);
+        throw new Error(err.response?.data?.detail || 'Erreur lors de la création du projet');
+    }
+};
+export const fetchProjects = async (): Promise<Projet[]> => {
+  try {
+    const response = await api.get('/gestion-imputations-projet/projets/', {
+      headers: getAuthHeaders(),
+      params: {
+        
+      }
+    });
+    console.log(response.data)
+    // Validation du schéma de réponse (optionnel mais recommandé)
+    if (!Array.isArray(response.data)) {
+      throw new Error('Format de réponse inattendu');
+    }
+
+    // Transformation des données si nécessaire
+    const projets: Projet[] = response.data.map((projet: any) => ({
+      ...projet,
+      // Formatage des dates si nécessaire
+      date_debut: projet.date_debut || '',
+      date_fin: projet.date_fin || '',
+      // Assure la cohérence des types
+      taux_horaire: Number(projet.taux_horaire) || 0,
+      equipe: projet.equipe ? {
+        id: projet.equipe.id,
+        nom: projet.equipe.nom || '',
+        description: projet.equipe.description || '',
+        manager: projet.equipe.manager || null,
+        membres: projet.equipe.membres || [],
+        status: projet.equipe.status || 'active',
+        date_creation: projet.equipe.date_creation || ''
+      } : null
+    }));
+
+    return projets;
+
+  } catch (error) {
+    console.error('Erreur lors de la récupération des projets:', error);
+    
+    // Gestion des erreurs spécifiques
+    const err = error as any;
+    if (err.response) {
+      switch (err.response.status) {
+        case 401:
+          throw new Error('Authentification requise');
+        case 403:
+          throw new Error('Permissions insuffisantes');
+        case 404:
+          throw new Error('Endpoint non trouvé');
+        default:
+          throw new Error(`Erreur serveur: ${err.response.status}`);
+      }
+    } else if (err.request) {
+      throw new Error('Pas de réponse du serveur');
+    } else {
+      throw new Error('Erreur de configuration de la requête');
+    }
+  }
 };

@@ -50,7 +50,7 @@ export interface EquipeFormData {
   id: number | null; 
   nom: string;
   description?: string;
-  manager: number | "";        // id du manager sélectionné
+  manager: number | "";        // id du manager 
   membres: number[];           // tableau d’ids
   status?: string;
 }
@@ -90,7 +90,7 @@ export interface Country {
 export interface CountryHolidays {
   date: string; // Format: YYYY-MM-DD
   name: string;
-  fixed: boolean; // Si le jour férié est fixe ou non
+  fixed: boolean; // Si le jour ferie est fixe ou non
 }
 
 export  interface Formule {
@@ -266,4 +266,28 @@ export interface ManagerDashboardData {
     id: number;
     nom: string;
   }>;
+}
+
+export interface Projet {
+    id: number;
+    identifiant: string;
+    nom: string;
+    description: string;
+    date_debut: string;
+    date_fin: string;
+    taux_horaire: number;
+    categorie: 'interne' | 'client' | 'r&d';
+    equipe: Equipe;
+    actif: boolean;
+    created_by?: User;
+}
+
+export interface ProjetFormData {
+    nom: string;
+    description: string;
+    date_debut: string;
+    date_fin: string;
+    taux_horaire: number;
+    categorie: 'interne' | 'client' | 'r&d';
+    equipe: number | null; // Doit être number ou null, pas boolean
 }

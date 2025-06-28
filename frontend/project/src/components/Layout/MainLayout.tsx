@@ -69,6 +69,8 @@ const MainLayout: React.FC = () => {
         switch (activeSection) {
           case 'team':
             return <TeamManagement />;
+            case 'projects':
+              return <ProjectsManagement/>
           
           
           case 'requests':

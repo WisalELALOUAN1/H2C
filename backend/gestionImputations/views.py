@@ -7,26 +7,61 @@ from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework import status
 from rest_framework.views import APIView
+from django.core.exceptions import PermissionDenied
+from rest_framework.exceptions import ValidationError
 from datetime import date, timedelta,timezone
+from gestionUtilisateurs.serializers import EquipeSerializer
 from dateutil import parser
 import calendar
 
 class ProjectViewSet(viewsets.ModelViewSet):
-    """
-    A simple ViewSet for viewing and editing projects.
-    """
-    queryset = Projet.objects.filter(actif=True)
     serializer_class = ProjetSerializer
-    permission_classes= [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
+
     def get_queryset(self):
-        queryset=Projet.objects.filter(actif=True)
-        if self.request.user.role=='manager':
-            equipes_managed=Equipe.objects.filter(manager=self.request.user)
-            queryset=queryset.filter(equipe__in=equipes_managed)
-        elif self.request.user.role=='employe':
-            equipe=self.request.user.equipe_membres.all()
-            queryset=queryset.filter(equipe__in=equipe)
+        queryset = Projet.objects.filter(actif=True).select_related('equipe__manager')
+        
+        if self.request.user.role == 'manager':
+            return queryset.filter(equipe__manager=self.request.user)
+        elif self.request.user.role == 'employe':
+            return queryset.filter(equipe__in=self.request.user.equipe_membres.all())
+        print (queryset)
         return queryset
+
+    def perform_create(self, serializer):
+        equipe_id = self.request.data.get('equipe')
+        
+        if not equipe_id and self.request.user.role == 'manager':
+            # Auto-attribution à l'équipe du manager si non spécifié
+            equipe = self.request.user.equipe_manager.first()
+            if not equipe:
+                raise PermissionDenied("Vous n'êtes manager d'aucune équipe")
+            serializer.save(equipe=equipe)
+        else:
+            # Validation pour les autres cas
+            if equipe_id:
+                equipe = serializer.validated_data.get('equipe')
+                if self.request.user.role == 'manager' and equipe.manager != self.request.user:
+                    raise PermissionDenied("Vous ne gérez pas cette équipe")
+            serializer.save()
+    @action(detail=False, methods=['get'])
+    def equipes_disponibles(self, request):
+        """
+        Retourne les équipes disponibles pour l'utilisateur connecté
+        """
+        user = request.user
+        
+        if user.role == 'admin':
+            equipes = Equipe.objects.all()
+        elif user.role == 'manager':
+            equipes = Equipe.objects.filter(manager=user)
+        elif user.role == 'employe':
+            equipes = request.user.equipe_membres.all()
+        else:
+            equipes = Equipe.objects.none()
+        
+        serializer = EquipeSerializer(equipes, many=True)
+        return Response(serializer.data)
 class ManagerImputationViewSet(viewsets.ModelViewSet):
     """
     A simple ViewSet for viewing and editing manager imputations.

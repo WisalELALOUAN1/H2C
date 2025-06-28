@@ -385,15 +385,7 @@ const SettingsView: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Verification du token */}
-                  <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                    <div className="flex items-center space-x-2">
-                      <Shield className="w-5 h-5 text-blue-600" />
-                      <span className="text-blue-800 font-medium">
-                        Session active : {localStorage.getItem("accessToken") ? "✓ Connecté" : "✗ Non connecté"}
-                      </span>
-                    </div>
-                  </div>
+                 
 
                   <form className="space-y-6" onSubmit={handlePasswordSubmit}>
                     <div>

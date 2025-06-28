@@ -1,6 +1,7 @@
 from django.db import models
 from authentication.models import Utilisateur  
 from django.contrib.auth import get_user_model
+import uuid
 User=get_user_model
 class Projet(models.Model):
     CATEGORIES_PROJET = (
@@ -8,7 +9,7 @@ class Projet(models.Model):
         ('interne', 'Projet Interne'),
         ('r&d', 'Recherche et Développement'),
     )
-    identifiant = models.CharField(max_length=50, unique=True)
+    identifiant = models.CharField(max_length=50, unique=True, default=uuid.uuid4, editable=False)
     nom = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     date_debut=models.DateField()
@@ -51,7 +52,7 @@ class SemaineImputation(models.Model):
     )
     
     employe = models.ForeignKey(Utilisateur, on_delete=models.CASCADE, related_name='semaines_imputation')
-    semaine = models.IntegerField()  # Numéro de semaine ISO
+    semaine = models.IntegerField()  # Numero de semaine ISO
     annee = models.IntegerField()
     statut = models.CharField(max_length=20, choices=STATUTS, default='brouillon')
     date_soumission = models.DateTimeField(null=True, blank=True)

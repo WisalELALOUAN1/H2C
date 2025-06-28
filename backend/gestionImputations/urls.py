@@ -20,4 +20,7 @@ urlpatterns = [
     path('semaine_courante/', SemaineCouranteView.as_view(), name='semaine-courante'),
     path('synthese_mensuelle/', SyntheseMensuelleView.as_view(), name='synthese-mensuelle'),
     path('manager/reporting/', ManagerDashboardViewSet.as_view({'get': 'reporting'}), name='manager-reporting'),
+     path('projets/equipes_disponibles/', 
+         ProjectViewSet.as_view({'get': 'equipes_disponibles'}), 
+         name='equipes-disponibles'),
 ]

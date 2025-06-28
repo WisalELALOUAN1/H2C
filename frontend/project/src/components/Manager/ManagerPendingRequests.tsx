@@ -243,7 +243,7 @@ const ManagerPendingRequests: React.FC = () => {
                           </div>
                           <div>
                             <div className="font-semibold text-amber-900">{demande.user}</div>
-                            <div className="text-xs text-amber-600">ID: {demande.user_id}</div>
+                            
                           </div>
                         </div>
                       </td>
