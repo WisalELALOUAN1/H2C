@@ -52,6 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange, isCol
           
           
           
+          
         ]
       case "employe":
         return [
@@ -61,8 +62,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange, isCol
           { id: "calendar", label: "Calendrier", icon: Calendar },
            { id: "settings", label: "Paramètres", icon: Settings },
          
-          { id: "timesheet", label: "Feuille de temps", icon: Clock },
+         
           { id: "performance", label: "Performance", icon: TrendingUp },
+           { id: "history", label: "Historique ", icon: History },
+          { id: "summary", label: "Feuille de temps", icon: Clock },
          
           
         ]
@@ -79,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange, isCol
         isCollapsed ? "w-16" : "w-64"
       } flex flex-col h-full`}
     >
-      {/* Logo/Brand */}
+     
       <div className="p-4 border-b border-brown-200">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-brown-600 rounded-lg flex items-center justify-center">

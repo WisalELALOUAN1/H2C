@@ -20,6 +20,9 @@ import ManagerPendingRequests from '../Manager/ManagerPendingRequests.tsx';
 import RegleCongeManager from '../Manager/RegleConge';
 import CalendarView from '../Employe/CalendarView.tsx';
 import AdminSoldeHistory from '../Admin/AdminSoldeHistory';
+import HistoryView  from '../Employe/HistoryView';
+
+
 
 const MainLayout: React.FC = () => {
   const { user } = useAuth();
@@ -94,6 +97,9 @@ const MainLayout: React.FC = () => {
             return <EmployeeAbsenceDashboard />;
           case 'settings':
             return <SettingsView />;
+          case 'history' :
+            return <HistoryView/>
+          
           default:
             return <div className="p-6 text-center text-brown-600">Section en développement</div>;
         }

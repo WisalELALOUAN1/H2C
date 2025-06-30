@@ -72,6 +72,7 @@ export interface PendingRequest {
   status: string;
   commentaire: string;
 }
+
 export interface LeaveRequest {
   id: number;
   type_demande: string;
@@ -226,6 +227,8 @@ export interface ReportParams {
   dateDebut?: string;
   dateFin?: string;
   projetId?: string;
+  employeId?: string;
+  categorie?: 'projet' | 'formation' | 'absence' | 'autre';
   format?: 'json' | 'csv' | 'pdf';
 }
 
@@ -290,4 +293,56 @@ export interface ProjetFormData {
     taux_horaire: number;
     categorie: 'interne' | 'client' | 'r&d';
     equipe: number | null; // Doit être number ou null, pas boolean
+}
+export interface TimeEntryData {
+  id?: number;
+  date: string; // Format: 'YYYY-MM-DD'
+  projet: {
+    id: number;
+    nom: string;
+  };
+  heures: number;
+  categorie: string;
+  employe?: {
+    id: number;
+    nom: string;
+    prenom: string;
+  };
+  valide?: boolean;
+}
+export interface TimeCategory {
+  id: 'projet' | 'formation' | 'absence' | 'autre';
+  label: string;
+}
+export interface CurrentWeekResponse {
+  imputations: ReportData[];
+  total_heures: number;
+  dates_semaine: string[];
+  statut: string;
+}
+export interface WeekImputation {
+  id?: number; // Optionnel pour les nouvelles entrées
+  date: string;
+  projetId: number;
+  projet?: Projet; // Optionnel - peut être présent dans la réponse API
+  heures: number;
+  categorie: string;
+  valide?: boolean;
+  commentaire?: string;
+}
+export interface WeekData {
+  imputations: WeekImputation[];
+  total_heures: number;
+  dates_semaine: string[];
+  statut: 'brouillon' | 'soumis' | 'valide';
+}
+export interface Imputation {
+  id?: number;
+  date: string;
+  projetId: number;
+  projet?: Project;
+  heures: number;
+  categorie: string;
+  valide?: boolean;
+  commentaire?: string;
 }

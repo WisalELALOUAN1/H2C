@@ -1,5 +1,5 @@
 import axios from "axios"
-import type { GlobalRules, User, EquipeFormData, Equipe ,ProjetFormData,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,ManagerDashboardData,Projet} from "../types"
+import type { GlobalRules, User, EquipeFormData, Equipe ,ProjetFormData,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,ManagerDashboardData,Projet,TimeEntryData} from "../types"
 
 const API_BASE_URL = "http://localhost:8000" 
 const api = axios.create({
@@ -34,7 +34,7 @@ api.interceptors.response.use(response => response, error => {
 });
 
 // Helper function to get auth headers
-const getAuthHeaders = () => {
+export const getAuthHeaders = () => {
   const token = localStorage.getItem("accessToken")
   return {
     Authorization: `Bearer ${token}`,
@@ -1165,4 +1165,70 @@ export const fetchProjects = async (): Promise<Projet[]> => {
       throw new Error('Erreur de configuration de la requête');
     }
   }
+};
+
+// --- TIME TRACKING API ---
+
+export const fetchEmployeeProjects = async (): Promise<Projet[]> => {
+  const response = await api.get('/gestion-imputations-projet/projets/', {
+    headers: getAuthHeaders()
+  });
+  return response.data;
+};
+
+export const fetchWeekTimeEntries = async (weekStart: string): Promise<WeeklyImputation> => {
+  const response = await api.get('/gestion-imputations-projet/employe/imputations/semaine_courante/', {
+    headers: getAuthHeaders(),
+    params: { date_debut: weekStart }
+  });
+  return response.data;
+};
+
+export const submitTimeEntry = async (entry: TimeEntryData): Promise<TimeEntryData> => {
+  const response = await api.post('/gestion-imputations-projet/employe/imputations/', entry, {
+    headers: getAuthHeaders()
+  });
+  return response.data;
+};
+
+export const fetchMonthlySummary = async (year: number, month: number): Promise<MonthlySummary> => {
+  const response = await api.get('/gestion-imputations-projet/synthese_mensuelle/', {
+    headers: getAuthHeaders(),
+    params: { year, month }
+  });
+  return response.data;
+};
+
+export const fetchTimeEntriesHistory = async (params: ReportParams): Promise<ReportData[]> => {
+  const response = await api.get('/gestion-imputations-projet/employe/imputations/historique/', {
+    headers: getAuthHeaders(),
+    params
+  });
+  return response.data;
+};
+
+export const exportTimeEntries = async (params: ReportParams, format: 'pdf' | 'csv' | 'json'): Promise<Blob> => {
+  const response = await api.get('/gestion-imputations-projet/manager/dashboard/reporting/', {
+    headers: getAuthHeaders(),
+    responseType: 'blob',
+    params: { ...params, format }
+  });
+  return response.data;
+};
+
+export const submitWeeklyImputations = async (
+  semaine: number, 
+  annee: number, 
+  employeId?: number
+): Promise<void> => {
+  await api.post(
+    '/gestion-imputations-projet/employe/imputations/soumettre_semaine/',
+    { semaine, annee, employe_id: employeId },
+    { headers: getAuthHeaders() }
+  );
+};
+
+export const fetchCurrentWeekEntries = async (): Promise<ReportData[]> => {
+  const response = await api.get('/gestion-imputations-projet/semaine_courante/');
+  return response.data.imputations;
 };

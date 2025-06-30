@@ -45,7 +45,7 @@ from .serializers import calculer_conges_acquis
 class ReglesGlobauxRetrieveUpdateView(generics.RetrieveUpdateAPIView):
     queryset = ReglesGlobaux.objects.all()
     serializer_class = ReglesGlobauxSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
         # Toujours retourner la 1ere config 
