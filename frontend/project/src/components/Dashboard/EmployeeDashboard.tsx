@@ -16,7 +16,8 @@ import {
   TrendingUp,
   User,
   Calendar,
-  XCircle
+  XCircle,
+  FolderOpen,Euro
 } from 'lucide-react';
 
 // Error Boundary Component
@@ -146,47 +147,84 @@ const WeeklyImputationsTab: React.FC<{
           <h2 className="text-2xl font-bold text-gray-800">Imputations</h2>
         </div>
         <div className="text-right">
-          <div className="text-3xl font-bold text-red-600">{totalHours.toFixed(1)}h</div>
+          <div className="text-3xl font-bold text-red-600">{`${Number(totalHours || 0).toFixed(1)}h`}</div>
           <div className="text-sm text-gray-600">Total semaine</div>
         </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-amber-800 to-amber-700 text-white">
-              <tr>
-                <th className="px-6 py-4 text-left">Date</th>
-                <th className="px-6 py-4 text-left">Projet</th>
-                <th className="px-6 py-4 text-left">Heures</th>
-                <th className="px-6 py-4 text-left">Catégorie</th>
-              </tr>
-            </thead>
-            <tbody>
-              {weekImputations.imputations.map((imputation, index) => (
-                <tr key={imputation.id} className={`border-b hover:bg-amber-50/30 ${
-                  index % 2 === 0 ? 'bg-amber-50/20' : 'bg-white'
-                }`}>
-                  <td className="px-6 py-4 font-semibold">
-                    {new Date(imputation.date).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 text-amber-800 font-semibold">
-                    {imputation.projet.nom}
-                  </td>
-                  <td className="px-6 py-4 font-bold text-red-600">
-                    {(imputation.heures || 0).toFixed(1)}h
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm">
-                      {imputation.categorie}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+  <div className="overflow-x-auto">
+    <table className="w-full">
+      <thead className="bg-gradient-to-r from-amber-800 to-amber-700 text-white">
+        <tr>
+          <th className="px-6 py-4 text-left">Date</th>
+          <th className="px-6 py-4 text-left">Activité</th>
+          <th className="px-6 py-4 text-left">Heures</th>
+          <th className="px-6 py-4 text-left">Catégorie</th>
+        </tr>
+      </thead>
+
+
+      <tbody>
+  {weekImputations.imputations.map((imputation, index) => {
+    // Détermine le nom à afficher selon la catégorie
+    const activityName = imputation.categorie === 'formation' 
+      ? 'Formation' 
+      : imputation.categorie === 'absence'
+      ? 'Absence'
+      : imputation.categorie === 'admin'
+      ? 'Tâches administratives'
+      : imputation.projet?.nom || 'Autre activité';
+
+    // Styles conditionnels
+    const categoryStyle = {
+      formation: 'bg-emerald-100 text-emerald-800',
+      absence: 'bg-red-100 text-red-800',
+      projet: 'bg-amber-100 text-amber-800',
+      admin: 'bg-purple-100 text-purple-800',
+      default: 'bg-gray-100 text-gray-800'
+    };
+
+    const textColor = imputation.categorie === 'formation' ? 'text-emerald-700' :
+                     imputation.categorie === 'absence' ? 'text-red-700' :
+                     imputation.categorie === 'admin' ? 'text-purple-700' :
+                     'text-amber-800';
+
+    const hoursColor = imputation.categorie === 'absence' 
+      ? 'text-red-600' 
+      : 'text-amber-600';
+
+    return (
+      <tr key={imputation.id} className={`border-b hover:bg-amber-50/30 ${
+        index % 2 === 0 ? 'bg-amber-50/20' : 'bg-white'
+      }`}>
+        <td className="px-6 py-4 font-semibold">
+          {new Date(imputation.date).toLocaleDateString()}
+        </td>
+        <td className={`px-6 py-4 font-semibold ${textColor}`}>
+          {activityName}
+        </td>
+        <td className={`px-6 py-4 font-bold ${hoursColor}`}>
+          {Number(imputation.heures || 0).toFixed(1)}h
+        </td>
+        <td className="px-6 py-4">
+          <span className={`px-3 py-1 rounded-full text-sm ${
+            categoryStyle[imputation.categorie as keyof typeof categoryStyle] || 
+            categoryStyle.default
+          }`}>
+            {imputation.categorie === 'projet' ? 'Projet' : 
+             imputation.categorie === 'formation' ? 'Formation' :
+             imputation.categorie === 'absence' ? 'Absence' :
+             imputation.categorie === 'admin' ? 'Admin' : 'Autre'}
+          </span>
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
+    </table>
+  </div>
+</div>
 
       <div className="bg-gradient-to-r from-amber-50 to-white p-6 rounded-xl border border-amber-100">
         <div className="flex items-center justify-between">
@@ -215,88 +253,102 @@ const MonthlySummaryTab: React.FC<{
   loading: boolean;
 }> = ({ monthlySummary, loading }) => {
   if (loading) return <LoadingSpinner />;
-  if (!monthlySummary) return <div className="text-center py-12 text-gray-500">Aucune donnée</div>;
+  if (!monthlySummary) return <div className="text-center py-12 text-gray-500">Aucune donnée disponible</div>;
 
-  const totalHours = monthlySummary.total_heures || 0;
-  const totalValue = monthlySummary.total_valeur || 0;
+  // Calcul des totaux
+  const activities = Object.values(monthlySummary.synthese || {});
+  const totalHours = activities.reduce((sum, data) => sum + (data.heures || 0), 0);
+  const totalValue = activities.reduce((sum, data) => sum + (data.heures * (data.taux_horaire || 0)), 0);
+  const hasActivities = activities.length > 0;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-3">
         <TrendingUp className="w-8 h-8 text-amber-600" />
-        <h2 className="text-2xl font-bold text-gray-800">Synthèse</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Synthèse mensuelle</h2>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Cartes de synthèse */}
+        <div className="grid grid-cols-1 gap-6 lg:col-span-1">
+          <StatCard
+            icon={<Clock className="w-6 h-6" />}
+            value={totalHours.toFixed(2)}
+            label="Heures totales"
+            gradient="bg-gradient-to-br from-amber-600 to-amber-700"
+          />
+          <StatCard
+            icon={<Euro className="w-6 h-6" />}
+            value={totalValue.toFixed(2)}
+            label="Valeur totale"
+            gradient="bg-gradient-to-br from-green-600 to-green-700"
+          />
+          <StatCard
+            icon={<Calendar className="w-6 h-6" />}
+            value={monthlySummary.periode || 'Période non spécifiée'}
+            label="Période"
+            gradient="bg-gradient-to-br from-blue-600 to-blue-700"
+          />
+        </div>
+
+        {/* Tableau des activités */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
             <div className="p-6 border-b">
-              <h3 className="text-lg font-semibold text-gray-800">Projets</h3>
+              <h3 className="text-lg font-semibold text-gray-800">Détail des activités</h3>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-amber-800 to-amber-700 text-white">
-                  <tr>
-                    <th className="px-6 py-4 text-left">Projet</th>
-                    <th className="px-6 py-4 text-left">Heures</th>
-                    <th className="px-6 py-4 text-left">Valeur</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(monthlySummary.synthese || {}).map(([projet, data], index) => (
-                    <tr key={projet} className={`border-b hover:bg-amber-50/30 ${
-                      index % 2 === 0 ? 'bg-amber-50/20' : 'bg-white'
-                    }`}>
-                      <td className="px-6 py-4 font-semibold text-amber-800">{projet}</td>
-                      <td className="px-6 py-4 font-bold">{(data.heures || 0).toFixed(2)}h</td>
-                      <td className="px-6 py-4 font-bold text-red-600">
-                        €{((data.heures || 0) * (data.taux_horaire || 0)).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Totaux</h3>
             
-            <div className="space-y-4">
-              <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-4 rounded-lg border border-amber-200">
-                <div className="text-sm text-amber-700 mb-1">Heures</div>
-                <div className="text-2xl font-bold text-amber-800">
-                  {totalHours.toFixed(2)}h
-                </div>
+            {hasActivities ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gradient-to-r from-amber-800 to-amber-700 text-white">
+                    <tr>
+                      <th className="px-6 py-4 text-left">Activité</th>
+                      <th className="px-6 py-4 text-left">Heures</th>
+                      <th className="px-6 py-4 text-left">Valeur</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(monthlySummary.synthese).map(([activite, data], index) => (
+                      <tr 
+                        key={`${activite}-${index}`} 
+                        className={`border-b hover:bg-amber-50/30 ${
+                          index % 2 === 0 ? 'bg-amber-50/20' : 'bg-white'
+                        }`}
+                      >
+                        <td className="px-6 py-4 font-semibold text-amber-800">
+                          {activite}
+                        </td>
+                        <td className="px-6 py-4 font-bold">
+                          {Number(data.heures).toFixed(2)}h
+                        </td>
+                        <td className="px-6 py-4 font-bold text-red-600">
+                          €{(data.heures * (data.taux_horaire || 0)).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              
-              <div className="bg-gradient-to-r from-red-50 to-red-100 p-4 rounded-lg border border-red-200">
-                <div className="text-sm text-red-700 mb-1">Valeur</div>
-                <div className="text-2xl font-bold text-red-600">
-                  €{totalValue.toFixed(2)}
-                </div>
+            ) : (
+              <div className="p-8 text-center text-gray-500">
+                <FolderOpen className="w-12 h-12 mx-auto text-gray-300" />
+                <p className="mt-2">Aucune activité enregistrée cette période</p>
+                <p className="text-sm text-gray-400">
+                  {monthlySummary.periode || ''}
+                </p>
               </div>
-              
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200">
-                <div className="text-sm text-gray-700 mb-1">Période</div>
-                <div className="text-lg font-semibold text-gray-800">
-                  {typeof monthlySummary.periode === 'object' && monthlySummary.periode !== null && 'debut' in monthlySummary.periode && 'fin' in monthlySummary.periode
-                    ? `${new Date((monthlySummary.periode as { debut: string; fin: string }).debut).toLocaleDateString()} - 
-                       ${new Date((monthlySummary.periode as { debut: string; fin: string }).fin).toLocaleDateString()}`
-                    : typeof monthlySummary.periode === 'string'
-                      ? monthlySummary.periode
-                      : 'N/A'}
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
 };
+
+        
+   
+
 
 const PersonalDataTab: React.FC<{
   user: any;
@@ -400,7 +452,9 @@ const EmployeeDashboard: React.FC = () => {
     setLoading(prev => ({...prev, month: true}));
     try {
       const today = new Date();
+
       const data = await getMonthlySummary(today.getFullYear(), today.getMonth() + 1);
+      console.log(data);
       setMonthlySummary(data);
     } catch (err) {
       console.error('Erreur:', err);
@@ -435,7 +489,12 @@ const EmployeeDashboard: React.FC = () => {
   };
 
   const totalHours = weekImputations?.imputations.reduce((sum, imp) => sum + (imp.heures || 0), 0) || 0;
-  const uniqueProjectsCount = new Set(weekImputations?.imputations.map(imp => imp.projet?.nom)).size || 0;
+  const uniqueProjectsCount = weekImputations?.imputations.reduce((acc, imp) => {
+  if (imp.categorie === 'projet' && imp.projet?.nom) {
+    acc.add(imp.projet.nom);
+  }
+  return acc;
+}, new Set<string>()).size || 0;
 
   if (!user) {
     return (
@@ -473,7 +532,7 @@ const EmployeeDashboard: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatCard
               icon={<Clock className="w-8 h-8" />}
-              value={`${totalHours.toFixed(1)}h`}
+              value={`${Number(totalHours || 0).toFixed(1)}h`}
               label="Semaine"
               gradient="bg-gradient-to-br from-amber-600 to-amber-700"
             />

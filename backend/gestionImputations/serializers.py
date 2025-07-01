@@ -21,18 +21,23 @@ class ProjetSerializer(serializers.ModelSerializer):
         return None
 
 class ImputationHoraireSerializer(serializers.ModelSerializer):
-    projet_nom = serializers.CharField(source='projet.nom', read_only=True)
+    projet_nom = serializers.CharField(source='projet.nom', read_only=True, allow_null=True)
     
     class Meta:
         model = ImputationHoraire
         fields = '__all__'
         extra_kwargs = {
-            'employe': {'read_only': True},
+            'employe': {'read_only': False},
             'valide': {'read_only': True},
             'date_saisie': {'read_only': True},
             'date_validation': {'read_only': True},
             'valide_par': {'read_only': True},
         }
+    
+    def validate(self, data):
+        if data.get('categorie') == 'projet' and not data.get('projet'):
+            raise serializers.ValidationError({"projet": "Ce champ est requis pour les activités de projet."})
+        return data
 
 class SemaineImputationSerializer(serializers.ModelSerializer):
     employe_nom = serializers.SerializerMethodField()

@@ -1,5 +1,5 @@
 import axios from "axios"
-import type { GlobalRules, User, EquipeFormData, Equipe ,ProjetFormData,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,ManagerDashboardData,Projet,TimeEntryData} from "../types"
+import type { GlobalRules, User, EquipeFormData,Formation, Equipe ,ImputationHoraire,ProjetFormData,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,ManagerDashboardData,Projet,TimeEntryData} from "../types"
 
 const API_BASE_URL = "http://localhost:8000" 
 const api = axios.create({
@@ -1228,7 +1228,222 @@ export const submitWeeklyImputations = async (
   );
 };
 
-export const fetchCurrentWeekEntries = async (): Promise<ReportData[]> => {
-  const response = await api.get('/gestion-imputations-projet/semaine_courante/');
-  return response.data.imputations;
+//export const fetchCurrentWeekEntries = async (): Promise<ReportData[]> => {
+  //const response = await api.get('/gestion-imputations-projet/semaine_courante/');
+ // return response.data.imputations;};
+export interface WeekImputation {
+  date: string;
+  projetId: number;
+  heures: number;
+  categorie: string;
+}
+//export const saveWeekImputations = async (imputations: WeekImputation[]): Promise<void> => {
+  //await api.post('/gestion-imputations-projet/semaine_imputation/', { imputations });
+//};
+export const fetchWeeklyImputationsApi = async (): Promise<WeeklyImputation> => {
+  const response = await api.get("/gestion-imputations-projet/employe/imputations/semaine_courante/", {
+    headers: getAuthHeaders(),
+  });
+  
+  // Transformer les données pour correspondre à l'interface WeeklyImputation
+  return {
+    imputations: response.data.imputations.map((imp: any) => ({
+      id: imp.id.toString(),
+      date: imp.date,
+      projet: {
+        id: imp.projet.id.toString(),
+        nom: imp.projet.nom,
+      },
+      heures: parseFloat(imp.heures),
+      categorie: imp.categorie,
+    })),
+    semaine_status: response.data.semaine_status,
+    dates_semaine: response.data.dates_semaine,
+  };
+};
+
+/**
+ * Récupère la liste des projets disponibles pour l'employé
+ */
+export const fetchEmployeeProjectsApi = async (): Promise<Projet[]> => {
+  const response = await api.get("/gestion-imputations-projet/employe/imputations/projets_employe/", {
+    headers: getAuthHeaders(),
+  });
+  
+  // Transformer les données pour correspondre à l'interface Projet
+  return response.data.map((projet: any) => ({
+    id: projet.id,
+    identifiant: projet.code || "",
+    nom: projet.nom,
+    description: projet.description || "",
+    date_debut: projet.date_debut || "",
+    date_fin: projet.date_fin || "",
+    taux_horaire: parseFloat(projet.taux_horaire) || 0,
+    categorie: projet.categorie || "interne",
+    equipe: projet.equipe, // Supposons que cette donnée est déjà au bon format
+    actif: projet.actif !== false, // Par défaut true si non spécifié
+    created_by: projet.created_by, // Supposons que cette donnée est déjà au bon format
+  }));
+};
+
+/**
+ * Soumet les imputations de la semaine courante
+ */
+export const submitWeeklyImputationsApi = async (): Promise<{ status: 'soumis' | 'valide' | 'rejete' }> => {
+  const response = await api.post(
+    "/gestion-imputations-projet/employe/imputations/soumettre_semaine/", 
+    {}, 
+    { headers: getAuthHeaders() }
+  );
+  return { status: response.data.status };
+};
+
+
+export const deleteImputationApi = async (imputationId: string): Promise<void> => {
+  await api.delete(`/gestion-imputations-projet/employe/imputations/${imputationId}/`, {
+    headers: getAuthHeaders(),
+  });
+};
+export const fetchEmployeeTeamProjects = async (): Promise<Projet[]> => {
+  const response = await api.get("/gestion-imputations-projet/employe-data/projets_equipes/");
+  return response.data.map((projet: any) => ({
+    id: projet.id,
+    identifiant: projet.identifiant,
+    nom: projet.nom,
+    description: projet.description,
+    date_debut: projet.date_debut,
+    date_fin: projet.date_fin,
+    taux_horaire: parseFloat(projet.taux_horaire),
+    categorie: projet.categorie,
+    actif: projet.actif
+  }));
+};
+export const fetchEmployeeTrainings = async (): Promise<Formation[]> => {
+  const response = await api.get(
+    "/gestion-imputations-projet/employe/imputations/formations_employe/"
+  );
+  return response.data;
+};
+export const fetchDailyImputations = async (date?: string): Promise<{
+  date: string;
+  imputations: ImputationHoraire[];
+  total_heures: number;
+}> => {
+  try {
+    console.log(`[fetchDailyImputations] Fetching imputations for date: ${date || 'current day'}`);
+    
+    const url = date 
+      ? `${API_BASE_URL}/gestion-imputations-projet/imputations/journalieres/${date}/`
+      : `${API_BASE_URL}/gestion-imputations-projet/imputations/journalieres/`;
+    
+    const response = await axios.get(url, {
+      headers: getAuthHeaders(),
+      params: {
+        timestamp: Date.now() // Evite le cache
+      }
+    });
+
+    console.log(`[fetchDailyImputations] Response for ${date}:`, response.data);
+    
+    if (!response.data || !Array.isArray(response.data.imputations)) {
+      throw new Error('Réponse invalide du serveur');
+    }
+
+    return {
+      date: response.data.date,
+      imputations: response.data.imputations,
+      total_heures: parseFloat(response.data.total_heures) || 0
+    };
+  } catch (error) {
+    console.error(`[fetchDailyImputations] Error fetching imputations for ${date}:`, error);
+    throw new Error(
+      (typeof error === "object" && error !== null && "response" in error && typeof (error as any).response === "object" && (error as any).response !== null && "data" in (error as any).response && (error as any).response.data?.message) ||
+      (typeof error === "object" && error !== null && "message" in error ? (error as any).message : String(error)) ||
+      'Erreur lors de la récupération des imputations'
+    );
+  }
+};
+
+export const createImputation = async (data: Omit<ImputationHoraire, 'id'>): Promise<ImputationHoraire> => {
+  try {
+    console.log('[createImputation] Creating new imputation:', data);
+    
+    const response = await axios.post(
+      `${API_BASE_URL}/gestion-imputations-projet/imputations/journalieres/`, 
+      data,
+      {
+        headers: getAuthHeaders()
+      }
+    );
+
+    console.log('[createImputation] Creation successful:', response.data);
+    return response.data;
+  } catch (error) {
+    if (error && typeof error === "object" && "response" in error) {
+      // @ts-expect-error: error is unknown, but we expect response property
+      console.error('[createImputation] Error:', error.response?.data || error);
+      // @ts-expect-error: error is unknown, but we expect response property
+      throw new Error(error.response?.data?.message || 'Échec de la création de l\'imputation');
+    } else {
+      console.error('[createImputation] Error:', error);
+      throw new Error('Échec de la création de l\'imputation');
+    }
+  }
+};
+
+export const updateImputation = async (id: number, data: Partial<ImputationHoraire>): Promise<ImputationHoraire> => {
+  try {
+    console.log(`[updateImputation] Updating imputation ${id} with:`, data);
+    
+    const response = await axios.patch(
+      `${API_BASE_URL}/gestion-imputations-projet/imputations/${id}/`, 
+      data,
+      {
+        headers: getAuthHeaders()
+      }
+    );
+
+    console.log(`[updateImputation] Update successful for ${id}:`, response.data);
+    return response.data;
+  } catch (error) {
+    if (error && typeof error === "object" && "response" in error) {
+      // @ts-expect-error: error is unknown, but we expect response property
+      console.error(`[updateImputation] Error updating ${id}:`, error.response?.data || error);
+      
+      throw new Error(
+        (typeof error.response === "object" && error.response !== null && "data" in error.response
+          ? (error.response as { data?: { message?: string } }).data?.message
+          : undefined) ||
+        'Échec de la mise à jour de l\'imputation'
+      );
+    } else {
+      console.error(`[updateImputation] Error updating ${id}:`, error);
+      throw new Error('Échec de la mise à jour de l\'imputation');
+    }
+  }
+};
+
+export const deleteImputation = async (id: number): Promise<void> => {
+  try {
+    console.log(`[deleteImputation] Deleting imputation ${id}`);
+    
+    await axios.delete(
+      `${API_BASE_URL}/gestion-imputations-projet/imputations/${id}/`,
+      {
+        headers: getAuthHeaders()
+      }
+    );
+
+    console.log(`[deleteImputation] Deletion successful for ${id}`);
+  } catch (error) {
+    if (error && typeof error === "object" && "response" in error) {
+      // @ts-expect-error: error is unknown, but we expect response property
+      console.error(`[deleteImputation] Error deleting ${id}:`, error.response?.data || error);
+      // @ts-expect-error: error is unknown, but we expect response property
+      throw new Error(error.response?.data?.message || 'Échec de la suppression de l\'imputation');
+    } else {
+      console.error(`[deleteImputation] Error deleting ${id}:`, error);
+      throw new Error('Échec de la suppression de l\'imputation');
+    }
+  }
 };

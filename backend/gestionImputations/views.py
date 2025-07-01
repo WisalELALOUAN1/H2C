@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets, permissions
-from .models import Projet,SemaineImputation,ImputationHoraire
+from .models import Projet,SemaineImputation,ImputationHoraire,Formation
 from .serializers import ProjetSerializer, SemaineImputationSerializer, ImputationHoraireSerializer,SyntheseMensuelleSerializer,FormationSerializer
 from gestionUtilisateurs.models import Equipe
 from rest_framework.response import Response
@@ -9,10 +9,12 @@ from rest_framework import status
 from rest_framework.views import APIView
 from django.core.exceptions import PermissionDenied
 from rest_framework.exceptions import ValidationError
-from datetime import date, timedelta,timezone
+from datetime import date, timedelta, timezone
+from datetime import datetime
 from gestionUtilisateurs.serializers import EquipeSerializer
 from dateutil import parser
 import calendar
+
 
 class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjetSerializer
@@ -100,6 +102,47 @@ class EmployeImputationViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(employe=self.request.user)
+    @action(detail=False, methods=['get'], url_path='formations_employe')
+    def formations_employe(self, request):
+        """
+        Retourne toutes les formations que l’utilisateur a déjà enregistrées.
+        Pas de pagination : la liste sert juste à pré-remplir un select.
+        """
+        formations = (
+            Formation.objects
+            .filter(employe=request.user)
+            .values(                 # on envoie uniquement ce qui est utile pour l’UI
+                'id',
+                'intitule',
+                'type_formation',
+                'date_debut',
+                'date_fin',
+                'heures'
+            )
+            .order_by('-date_fin')
+        )
+        return Response(list(formations))
+    @action(detail=False, methods=['get'], url_path='projets_employe')
+    def projets_employe(self, request):
+        """
+        Liste les projets rattachés aux équipes dont l’utilisateur est membre.
+        - Filtre uniquement les projets « actifs ».
+        - Renvoie id, nom, identifiant, taux_horaire, categorie.
+        """
+        projets_qs = (
+            Projet.objects
+            .filter(equipe__membres=request.user, actif=True)
+            .values(
+                'id',
+                'nom',
+                'identifiant',
+                'taux_horaire',
+                'categorie'
+            )
+            .distinct()
+        )
+
+        return Response(list(projets_qs))
 
     @action(detail=False, methods=['get'])
     def semaine_courante(self, request):
@@ -194,9 +237,10 @@ class EmployeImputationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def synthese_mensuelle(self, request):
-        """Synthèse mensuelle des heures par projet"""
+    
         year = request.query_params.get('year', date.today().year)
         month = request.query_params.get('month', date.today().month)
+        print(f"Year: {year}, Month: {month}")  # Add this at the start of synthese_mensuelle
         
         try:
             year = int(year)
@@ -216,15 +260,28 @@ class EmployeImputationViewSet(viewsets.ModelViewSet):
         ).select_related('projet')
         
         synthese = {}
+        autres_activites = {
+            'heures': 0,
+            'projet_id': None,
+            'taux_horaire': 0
+        }
+        
         for imputation in imputations:
-            projet = imputation.projet.nom
-            if projet not in synthese:
-                synthese[projet] = {
-                    'heures': 0,
-                    'projet_id': imputation.projet.id,
-                    'taux_horaire': imputation.projet.taux_horaire
-                }
-            synthese[projet]['heures'] += float(imputation.heures)
+            if imputation.projet:
+                projet_nom = imputation.projet.nom
+                if projet_nom not in synthese:
+                    synthese[projet_nom] = {
+                        'heures': 0,
+                        'projet_id': imputation.projet.id,
+                        'taux_horaire': float(imputation.projet.taux_horaire)
+                    }
+                synthese[projet_nom]['heures'] += float(imputation.heures)
+            else:
+                autres_activites['heures'] += float(imputation.heures)
+        
+        # Ajouter la catégorie "Autres activités" si nécessaire
+        if autres_activites['heures'] > 0:
+            synthese['Autres activités'] = autres_activites
         
         # Calcul du total et valorisation
         total_heures = sum(item['heures'] for item in synthese.values())
@@ -584,3 +641,84 @@ class SyntheseMensuelleView(APIView):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+class DailyImputationView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request, date=None):
+        """Récupère les imputations pour une date spécifique"""
+        try:
+            target_date = datetime.strptime(date, '%Y-%m-%d').date() if date else timezone.now().date()
+        except ValueError:
+            return Response({"error": "Format de date invalide"}, status=400)
+        
+        imputations = ImputationHoraire.objects.filter(
+            employe=request.user,
+            date=target_date
+        ).select_related('projet')
+        
+        serializer = ImputationHoraireSerializer(imputations, many=True)
+        return Response({
+            'date': target_date.strftime('%Y-%m-%d'),
+            'imputations': serializer.data,
+            'total_heures': sum(float(imp.heures) for imp in imputations)
+        })
+    def post(self, request):
+        """Crée une nouvelle imputation"""
+        data = request.data.copy()
+        print("data recu :", data)
+        
+        # Ajoute automatiquement l'employé connecté
+        data['employe'] = request.user.id
+        
+        # Convertit l'objet projet en ID si nécessaire
+        if 'projet' in data and isinstance(data['projet'], dict):
+            data['projet'] = data['projet'].get('id')
+        
+        # Validation des données
+        try:
+            heures = float(data.get('heures', 0))
+            if heures <= 0 or heures > 24:
+                return Response(
+                    {"heures": "Le nombre d'heures doit être entre 0 et 24"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except (ValueError, TypeError):
+            return Response(
+                {"heures": "Valeur d'heures invalide"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Pour les non-projets, force projet à None
+        if data.get('categorie') != 'projet':
+            data['projet'] = None
+
+        serializer = ImputationHoraireSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def patch(self, request, id=None):
+        """Mise à jour partielle d'une imputation"""
+        try:
+            imputation = ImputationHoraire.objects.get(pk=id, employe=request.user)
+        except ImputationHoraire.DoesNotExist:
+            return Response(
+                {"error": "Imputation non trouvée"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Convertit l'objet projet en ID si nécessaire
+        if 'projet' in request.data and isinstance(request.data['projet'], dict):
+            request.data._mutable = True
+            request.data['projet'] = request.data['projet'].get('id')
+            request.data._mutable = False
+
+        serializer = ImputationHoraireSerializer(
+            imputation, 
+            data=request.data, 
+            partial=True
+        )
+        
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

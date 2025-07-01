@@ -6,7 +6,8 @@ from .views import (
     EmployeImputationViewSet,
     ManagerDashboardViewSet,
     SemaineCouranteView,
-    SyntheseMensuelleView
+    SyntheseMensuelleView,
+    DailyImputationView
 )
 
 router = DefaultRouter()
@@ -23,4 +24,7 @@ urlpatterns = [
      path('projets/equipes_disponibles/', 
          ProjectViewSet.as_view({'get': 'equipes_disponibles'}), 
          name='equipes-disponibles'),
+    path('imputations/journalieres/', DailyImputationView.as_view(), name='daily-imputations'),
+    path('imputations/journalieres/<str:date>/', DailyImputationView.as_view(), name='daily-imputations-date'),
+    path('imputations/<int:id>/', DailyImputationView.as_view(), name='delete-imputation'),
 ]

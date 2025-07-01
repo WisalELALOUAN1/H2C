@@ -27,22 +27,26 @@ class ImputationHoraire(models.Model):
         ('absence', 'Absence'),
         ('autre', 'Autre activité'),
     )
+    
     employe = models.ForeignKey(Utilisateur, on_delete=models.CASCADE, related_name='imputations')
-    projet = models.ForeignKey(Projet, on_delete=models.CASCADE, related_name='imputations')
-    date= models.DateField()
+    projet = models.ForeignKey(Projet, on_delete=models.CASCADE, related_name='imputations', null=True, blank=True)  # Rendre le projet optionnel
+    date = models.DateField()
     heures = models.DecimalField(max_digits=5, decimal_places=2)
     categorie = models.CharField(max_length=20, choices=CATEGORIES_TEMPS, default='projet')
     description = models.TextField(blank=True)
-    valide= models.BooleanField(default=False)
+    valide = models.BooleanField(default=False)
     date_saisie = models.DateTimeField(auto_now_add=True)
     date_validation = models.DateTimeField(null=True, blank=True)
     valide_par = models.ForeignKey(Utilisateur, on_delete=models.SET_NULL, null=True, blank=True, related_name='validations')
+
     class Meta:
-        unique_together = ('employe', 'projet', 'date')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['employe', 'projet', 'date', 'heures', 'description'],
+                name='uniq_imputation_exacte'
+            )
+        ]
         ordering = ['-date', 'employe']
-    
-    def __str__(self):
-        return f"{self.employe} - {self.projet} - {self.date}: {self.heures}h"
 class SemaineImputation(models.Model):
     STATUTS = (
         ('brouillon', 'Brouillon'),

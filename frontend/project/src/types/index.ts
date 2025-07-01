@@ -336,13 +336,71 @@ export interface WeekData {
   dates_semaine: string[];
   statut: 'brouillon' | 'soumis' | 'valide';
 }
-export interface Imputation {
-  id?: number;
+// types.ts
+export interface ImputationHoraire {
+  id: number;
+  date: string; // Format: 'YYYY-MM-DD'
+  heures: number; // Nombre d'heures (peut être décimal)
+  description?: string;
+  valide: boolean;
+  date_saisie: string; // DateTime ISO
+  date_validation?: string; // DateTime ISO
+  
+  // Catégorie et type d'activité
+  categorie: 'projet' | 'formation' | 'absence' | 'autre';
+  type_activite?: string; // Plus spécifique que la catégorie
+  
+  // Relations
+  employe: {
+    id: number;
+    nom: string;
+    prenom: string;
+    email: string;
+  };
+  
+  projet?: {
+    id: number;
+    nom: string;
+    identifiant: string;
+    taux_horaire: number;
+    categorie: 'client' | 'interne' | 'r&d';
+  };
+  
+  formation?: {
+    id: number;
+    intitule: string;
+    type: 'interne' | 'externe' | 'autoformation';
+  };
+  
+  valide_par?: {
+    id: number;
+    nom: string;
+    prenom: string;
+  };
+}
+
+// Interface pour la réponse des imputations journalières
+export interface DailyImputationsResponse {
   date: string;
-  projetId: number;
-  projet?: Project;
+  total_heures: number;
+  imputations: ImputationHoraire[];
+}
+
+// Interface pour la création/modification
+export interface ImputationInput {
+  date: string;
   heures: number;
-  categorie: string;
-  valide?: boolean;
-  commentaire?: string;
+  description?: string;
+  categorie: 'projet' | 'formation' | 'absence' | 'autre';
+  projet_id?: number;
+  formation_id?: number;
+  type_activite?: string;
+}
+export interface Formation {
+  id: number;
+  intitule: string;
+  type_formation: "interne" | "externe" | "autoformation";
+  date_debut: string;   // ISO "yyyy-mm-dd"
+  date_fin: string;     // ISO
+  heures: number;       // nombre d’heures
 }
