@@ -67,6 +67,7 @@ npm install
 
 # Lancer le serveur de développement
 npm run dev
+
 Le frontend est accessible sur : http://localhost:5173
 
 # 🌐 URLs Utiles
