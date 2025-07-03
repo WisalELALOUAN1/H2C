@@ -46,7 +46,10 @@ H2C/
 1. Cloner le projet
 
 git clone https://github.com/WisalELALOUAN1/H2C
+
+
 cd H2C
+
 2. Préparer le Backend (Django)
 
 cd backend
