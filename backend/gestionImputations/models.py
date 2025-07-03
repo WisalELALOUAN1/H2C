@@ -25,11 +25,19 @@ class ImputationHoraire(models.Model):
         ('projet', 'Heures productives (projets)'),
         ('formation', 'Formation'),
         ('absence', 'Absence'),
+        ('reunion', 'Réunion'),          
+        ('admin', 'Tâche administrative'),
         ('autre', 'Autre activité'),
     )
     
     employe = models.ForeignKey(Utilisateur, on_delete=models.CASCADE, related_name='imputations')
-    projet = models.ForeignKey(Projet, on_delete=models.CASCADE, related_name='imputations', null=True, blank=True)  # Rendre le projet optionnel
+    projet = models.ForeignKey(Projet, on_delete=models.CASCADE, related_name='imputations', null=True, blank=True) 
+    formation  = models.ForeignKey(           
+        'Formation',        
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='imputations'
+    )
     date = models.DateField()
     heures = models.DecimalField(max_digits=5, decimal_places=2)
     categorie = models.CharField(max_length=20, choices=CATEGORIES_TEMPS, default='projet')
@@ -40,11 +48,18 @@ class ImputationHoraire(models.Model):
     valide_par = models.ForeignKey(Utilisateur, on_delete=models.SET_NULL, null=True, blank=True, related_name='validations')
 
     class Meta:
+        # une contrainte unique distincte pour projet vs formation
         constraints = [
             models.UniqueConstraint(
-                fields=['employe', 'projet', 'date', 'heures', 'description'],
-                name='uniq_imputation_exacte'
-            )
+                fields=['employe', 'date', 'projet', 'heures', 'description'],
+                name='uniq_imputation_projet',
+                condition=models.Q(categorie='projet')
+            ),
+            models.UniqueConstraint(
+                fields=['employe', 'date', 'formation', 'heures', 'description'],
+                name='uniq_imputation_formation',
+                condition=models.Q(categorie='formation')
+            ),
         ]
         ordering = ['-date', 'employe']
 class SemaineImputation(models.Model):

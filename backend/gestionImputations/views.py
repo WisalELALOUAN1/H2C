@@ -14,6 +14,8 @@ from datetime import datetime
 from gestionUtilisateurs.serializers import EquipeSerializer
 from dateutil import parser
 import calendar
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
+from django.db import IntegrityError
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -92,7 +94,19 @@ class ManagerImputationViewSet(viewsets.ModelViewSet):
             'semaines': serializer.data,
             'charge_par_projet': charge_par_projet,
         })
+class FormationViewSet(viewsets.ModelViewSet):
+    queryset = Formation.objects.all()
+    serializer_class = FormationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    # ← Ajout indispensable
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    def get_queryset(self):
+        return Formation.objects.filter(employe=self.request.user).order_by('-date_debut')
+
+    def perform_create(self, serializer):
+        serializer.save(employe=self.request.user)
 class EmployeImputationViewSet(viewsets.ModelViewSet):
     serializer_class = ImputationHoraireSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -643,82 +657,135 @@ class SyntheseMensuelleView(APIView):
             )
 class DailyImputationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    # ---------------------------------------------------------------------- GET
     def get(self, request, date=None):
-        """Récupère les imputations pour une date spécifique"""
+        """Récupère les imputations d’une date"""
         try:
-            target_date = datetime.strptime(date, '%Y-%m-%d').date() if date else timezone.now().date()
+            target_date = (
+                datetime.strptime(date, "%Y-%m-%d").date()
+                if date else timezone.now().date()
+            )
         except ValueError:
             return Response({"error": "Format de date invalide"}, status=400)
-        
-        imputations = ImputationHoraire.objects.filter(
-            employe=request.user,
-            date=target_date
-        ).select_related('projet')
-        
-        serializer = ImputationHoraireSerializer(imputations, many=True)
-        return Response({
-            'date': target_date.strftime('%Y-%m-%d'),
-            'imputations': serializer.data,
-            'total_heures': sum(float(imp.heures) for imp in imputations)
-        })
-    def post(self, request):
-        """Crée une nouvelle imputation"""
-        data = request.data.copy()
-        print("data recu :", data)
-        
-        # Ajoute automatiquement l'employé connecté
-        data['employe'] = request.user.id
-        
-        # Convertit l'objet projet en ID si nécessaire
-        if 'projet' in data and isinstance(data['projet'], dict):
-            data['projet'] = data['projet'].get('id')
-        
-        # Validation des données
-        try:
-            heures = float(data.get('heures', 0))
-            if heures <= 0 or heures > 24:
-                return Response(
-                    {"heures": "Le nombre d'heures doit être entre 0 et 24"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        except (ValueError, TypeError):
-            return Response(
-                {"heures": "Valeur d'heures invalide"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
 
-        # Pour les non-projets, force projet à None
-        if data.get('categorie') != 'projet':
-            data['projet'] = None
-
-        serializer = ImputationHoraireSerializer(data=data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    def patch(self, request, id=None):
-        """Mise à jour partielle d'une imputation"""
-        try:
-            imputation = ImputationHoraire.objects.get(pk=id, employe=request.user)
-        except ImputationHoraire.DoesNotExist:
-            return Response(
-                {"error": "Imputation non trouvée"}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        # Convertit l'objet projet en ID si nécessaire
-        if 'projet' in request.data and isinstance(request.data['projet'], dict):
-            request.data._mutable = True
-            request.data['projet'] = request.data['projet'].get('id')
-            request.data._mutable = False
-
-        serializer = ImputationHoraireSerializer(
-            imputation, 
-            data=request.data, 
-            partial=True
+        imputations = (
+            ImputationHoraire.objects
+            .filter(employe=request.user, date=target_date)
+            .select_related("projet", "formation")
         )
-        
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        ser = ImputationHoraireSerializer(imputations, many=True)
+        return Response({
+            "date": target_date.strftime("%Y-%m-%d"),
+            "imputations": ser.data,
+            "total_heures": sum(float(i.heures) for i in imputations),
+        })
+
+    # ---------------------------------------------------------------------- POST
+    def post(self, request):
+        """Création d’une imputation"""
+        data = request.data.copy()
+
+        # Assigner employe_id
+        data["employe_id"] = request.user.id
+
+        # Mapper objet → *_id
+        if isinstance(data.get("projet"), dict):
+            data["projet_id"] = data.pop("projet")["id"]
+        if isinstance(data.get("formation"), dict):
+            data["formation_id"] = data.pop("formation")["id"]
+
+        # Validation des heures
+        try:
+            h = float(data.get("heures", 0))
+            if h <= 0 or h > 24:
+                return Response({"heures": "0 < heures ≤ 24"}, status=400)
+        except (ValueError, TypeError):
+            return Response({"heures": "Valeur d'heures invalide"}, status=400)
+
+        # Exclusivité projet / formation
+        cat = data.get("categorie")
+        if cat == "projet":
+            data.pop("formation_id", None)
+        elif cat == "formation":
+            data.pop("projet_id", None)
+        else:
+            data.pop("projet_id", None)
+            data.pop("formation_id", None)
+
+        # Sérialisation
+        ser = ImputationHoraireSerializer(data=data, context={'request': request})
+        if not ser.is_valid():
+            return Response(ser.errors, status=400)
+
+        # Tentative de création avec gestion de l'unicité
+        try:
+            imputation = ser.save()
+        except IntegrityError as e:
+            # Contrainte unique sur (employe, date, projet, heures, description)
+            return Response(
+                {"non_field_errors": ["Cette imputation existe déjà pour ce projet/date/heures/description."]},
+                status=400
+            )
+
+        # Réponse 201 sur succès
+        out_ser = ImputationHoraireSerializer(imputation)
+        return Response(out_ser.data, status=status.HTTP_201_CREATED)
+
+    # ---------------------------------------------------------------------- PATCH
+    def patch(self, request, id=None):
+        """Mise à jour partielle d’une imputation"""
+        try:
+            imp = ImputationHoraire.objects.get(pk=id, employe=request.user)
+        except ImputationHoraire.DoesNotExist:
+            return Response({"error": "Imputation non trouvée"}, status=404)
+
+        data = request.data.copy()
+
+        # Mapper objet → *_id
+        if isinstance(data.get("projet"), dict):
+            data["projet_id"] = data.pop("projet")["id"]
+        if isinstance(data.get("formation"), dict):
+            data["formation_id"] = data.pop("formation")["id"]
+
+        # Exclusivité projet / formation et nettoyage instance
+        cat = data.get("categorie")
+        if cat == "projet":
+            data.pop("formation_id", None)
+            setattr(imp, "formation", None)
+        elif cat == "formation":
+            data.pop("projet_id", None)
+            setattr(imp, "projet", None)
+        else:
+            data.pop("projet_id", None)
+            data.pop("formation_id", None)
+            setattr(imp, "projet", None)
+            setattr(imp, "formation", None)
+
+        ser = ImputationHoraireSerializer(
+            imp, data=data, partial=True, context={'request': request}
+        )
+        if not ser.is_valid():
+            print("[PATCH ERROR]", ser.errors)
+            return Response(ser.errors, status=400)
+
+        try:
+            updated = ser.save()
+        except IntegrityError:
+            return Response(
+                {"non_field_errors": ["Mise à jour violerait une imputation existante (unicité)."]},
+                status=400
+            )
+
+        out_ser = ImputationHoraireSerializer(updated)
+        return Response(out_ser.data)
+    def delete(self, request, id=None):
+        """Suppression d'une imputation"""
+        try:
+            imp = ImputationHoraire.objects.get(pk=id, employe=request.user)
+        except ImputationHoraire.DoesNotExist:
+            return Response({"error": "Imputation non trouvée"}, status=404)
+        imp.delete()
+        return Response({"status": "deleted"}, status=204)

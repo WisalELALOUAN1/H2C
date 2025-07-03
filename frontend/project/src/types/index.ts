@@ -400,7 +400,10 @@ export interface Formation {
   id: number;
   intitule: string;
   type_formation: "interne" | "externe" | "autoformation";
-  date_debut: string;   // ISO "yyyy-mm-dd"
-  date_fin: string;     // ISO
-  heures: number;       // nombre d’heures
+  description?: string;
+  date_debut: string;   
+  date_fin: string;     
+  heures: number;       
+  employe?: User;
+  justificatif?: string; //
 }

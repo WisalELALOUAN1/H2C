@@ -7,7 +7,8 @@ from .views import (
     ManagerDashboardViewSet,
     SemaineCouranteView,
     SyntheseMensuelleView,
-    DailyImputationView
+    DailyImputationView,
+    FormationViewSet,
 )
 
 router = DefaultRouter()
@@ -15,6 +16,7 @@ router.register(r'projets', ProjectViewSet, basename='projet')
 router.register(r'manager/imputations', ManagerImputationViewSet, basename='manager-imputation')
 router.register(r'employe/imputations', EmployeImputationViewSet, basename='employe-imputation')
 router.register(r'manager/dashboard', ManagerDashboardViewSet, basename='manager-dashboard')
+router.register(r'trainings', FormationViewSet, basename='training')
 
 urlpatterns = [
     path('', include(router.urls)),

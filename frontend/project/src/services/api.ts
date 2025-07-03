@@ -1320,8 +1320,9 @@ export const fetchEmployeeTeamProjects = async (): Promise<Projet[]> => {
 };
 export const fetchEmployeeTrainings = async (): Promise<Formation[]> => {
   const response = await api.get(
-    "/gestion-imputations-projet/employe/imputations/formations_employe/"
+    "/gestion-imputations-projet/employe/imputations/formations_employe/",{headers: getAuthHeaders(),}
   );
+
   return response.data;
 };
 export const fetchDailyImputations = async (date?: string): Promise<{
@@ -1391,29 +1392,51 @@ export const createImputation = async (data: Omit<ImputationHoraire, 'id'>): Pro
   }
 };
 
-export const updateImputation = async (id: number, data: Partial<ImputationHoraire>): Promise<ImputationHoraire> => {
+export const updateImputation = async (
+  id: number,
+  data: Partial<ImputationHoraire>
+): Promise<ImputationHoraire> => {
   try {
-    console.log(`[updateImputation] Updating imputation ${id} with:`, data);
-    
+    // On clone pour ne jamais modifier data original
+    const sendData: any = { ...data };
+
+    // 1. Convertir projet objet → projet_id
+    if (sendData.projet && typeof sendData.projet === "object") {
+      sendData.projet_id = sendData.projet.id;
+      delete sendData.projet;
+    }
+    // 2. Convertir formation objet → formation_id
+    if (sendData.formation && typeof sendData.formation === "object") {
+      sendData.formation_id = sendData.formation.id;
+      delete sendData.formation;
+    }
+
+    // 3. BONUS : Ne pas envoyer l’ID non concerné selon la catégorie choisie
+    if (sendData.categorie === "projet") {
+      delete sendData.formation_id; // Pas de formation_id si projet
+    }
+    if (sendData.categorie === "formation") {
+      delete sendData.projet_id;    // Pas de projet_id si formation
+    }
+
+    console.log(`[updateImputation] Updating imputation ${id} with:`, sendData);
+
     const response = await axios.patch(
-      `${API_BASE_URL}/gestion-imputations-projet/imputations/${id}/`, 
-      data,
+      `${API_BASE_URL}/gestion-imputations-projet/imputations/${id}/`,
+      sendData,
       {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
       }
     );
 
     console.log(`[updateImputation] Update successful for ${id}:`, response.data);
     return response.data;
-  } catch (error) {
-    if (error && typeof error === "object" && "response" in error) {
-      // @ts-expect-error: error is unknown, but we expect response property
+  } catch (error: any) {
+    if (error && error.response) {
       console.error(`[updateImputation] Error updating ${id}:`, error.response?.data || error);
-      
       throw new Error(
-        (typeof error.response === "object" && error.response !== null && "data" in error.response
-          ? (error.response as { data?: { message?: string } }).data?.message
-          : undefined) ||
+        error.response?.data?.detail ||
+        error.response?.data?.non_field_errors?.[0] ||
         'Échec de la mise à jour de l\'imputation'
       );
     } else {
@@ -1422,6 +1445,7 @@ export const updateImputation = async (id: number, data: Partial<ImputationHorai
     }
   }
 };
+
 
 export const deleteImputation = async (id: number): Promise<void> => {
   try {
@@ -1446,4 +1470,30 @@ export const deleteImputation = async (id: number): Promise<void> => {
       throw new Error('Échec de la suppression de l\'imputation');
     }
   }
+};
+export const createFormation = async (formData: FormData): Promise<Formation> => {
+    try {
+        const response = await api.post(
+            '/gestion-imputations-projet/trainings/', 
+            formData, 
+            {
+                // Axios gère automatiquement Content-Type avec FormData
+                withCredentials: true,
+                headers: {
+                    ...getAuthHeaders(),
+                    // Ne pas mettre Content-Type ici si c’est FormData !
+                },
+            }
+        );
+        return response.data;
+    } catch (error: any) {
+        console.error('Erreur création formation:', error.response?.data);
+        // Affiche le détail côté API s’il existe, sinon message générique
+        throw new Error(
+            error.response?.data?.detail ||
+            error.response?.data?.intitule?.[0] ||
+            error.response?.data?.non_field_errors?.[0] ||
+            'Erreur lors de la création de la formation'
+        );
+    }
 };

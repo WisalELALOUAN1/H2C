@@ -15,6 +15,12 @@ import {
   Loader2,
   CheckCircle,
   Copy,
+  MapPin,
+  User,
+  FileText,
+  Timer,
+  Upload,
+  X,
 } from "lucide-react";
 import { eachDayOfInterval, format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -25,11 +31,14 @@ import {
   updateImputation,
   deleteImputation,
   fetchEmployeeProjectsApi,
+  fetchEmployeeTrainings,
+  createFormation
 } from "../../services/api";
 import type {
   GlobalRules,
   ImputationHoraire,
   Projet,
+  Formation
 } from "../../types";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -44,24 +53,7 @@ interface ActivityType {
 }
 
 const activityTypes: ActivityType[] = [
-  {
-    id: "projet",
-    label: "Travail sur projet",
-    icon: Briefcase,
-    color: "amber",
-    bgColor: "bg-amber-50",
-    borderColor: "border-amber-200",
-    textColor: "text-amber-700",
-  },
-  {
-    id: "formation",
-    label: "Formation",
-    icon: BookOpen,
-    color: "emerald",
-    bgColor: "bg-emerald-50",
-    borderColor: "border-emerald-200",
-    textColor: "text-emerald-700",
-  },
+  
   {
     id: "reunion",
     label: "Réunion",
@@ -89,7 +81,383 @@ const activityTypes: ActivityType[] = [
     borderColor: "border-purple-200",
     textColor: "text-purple-700",
   },
+  {
+    id: "projet",
+    label: "Travail sur projet",
+    icon: Briefcase,
+    color: "amber",
+    bgColor: "bg-amber-50",
+    borderColor: "border-amber-200",
+    textColor: "text-amber-700",
+  },
+  {
+    id: "formation",
+    label: "Formation",
+    icon: BookOpen,
+    color: "emerald",
+    bgColor: "bg-emerald-50",
+    borderColor: "border-emerald-200",
+    textColor: "text-emerald-700",
+  }
 ];
+
+const getFormationTypeLabel = (type: string): string => {
+  const labels = {
+    'interne': 'Formation Interne',
+    'externe': 'Formation Externe', 
+    'autoformation': 'Autoformation'
+  };
+  return labels[type as keyof typeof labels] || type;
+};
+
+const getFormationTypeBadgeColor = (type: string): string => {
+  const colors = {
+    'interne': 'bg-blue-100 text-blue-700',
+    'externe': 'bg-purple-100 text-purple-700',
+    'autoformation': 'bg-green-100 text-green-700'
+  };
+  return colors[type as keyof typeof colors] || 'bg-gray-100 text-gray-700';
+};
+
+interface NewFormationFormProps {
+  onSave: (formation: Partial<Formation>) => Promise<Formation>;
+  onCancel: () => void;
+  loading?: boolean;
+}
+
+const NewFormationForm: React.FC<NewFormationFormProps> = ({
+  onSave,
+  onCancel,
+  loading = false
+}) => {
+  const [formData, setFormData] = useState<Partial<Formation>>({
+    intitule: '',
+    type_formation: 'interne',
+    description: '',
+    date_debut: format(new Date(), 'yyyy-MM-dd'),
+    date_fin: format(new Date(), 'yyyy-MM-dd'),
+    heures: 1,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.MouseEvent | React.KeyboardEvent) => {
+    console.log('NewFormationForm: Form submitted');
+    
+    //fixed 
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('NewFormationForm: Default prevented, processing form');
+    console.log('Form data:', formData);
+    
+    if (!isFormValid()) {
+      console.log('NewFormationForm: Form is not valid');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      console.log('NewFormationForm: Calling onSave with data:', formData);
+      const result = await onSave(formData);
+      console.log('NewFormationForm: Formation created successfully:', result);
+    } catch (error) {
+      console.error('NewFormationForm: Error creating formation:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey && isFormValid()) {
+      handleSubmit(e);
+    }
+  };
+
+  const updateField = (field: keyof Formation, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const isFormValid = () => {
+    const valid = !!(
+      formData.intitule?.trim() && 
+      formData.date_debut && 
+      formData.date_fin && 
+      formData.heures && 
+      formData.heures > 0
+    );
+    console.log('Form validation result:', valid, formData);
+    return valid;
+  };
+
+  return (
+    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="font-medium text-emerald-800 flex items-center">
+          <BookOpen className="w-4 h-4 mr-2" />
+          Créer une nouvelle formation
+        </h4>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onCancel();
+          }}
+          className="p-1 rounded-lg text-emerald-400 hover:text-emerald-600 hover:bg-emerald-100 transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="space-y-3" onKeyDown={handleKeyDown}>
+       
+        <div>
+          <label className="block text-sm font-medium text-emerald-700 mb-1">
+            Intitulé de la formation *
+          </label>
+          <input
+            type="text"
+            value={formData.intitule || ''}
+            onChange={(e) => updateField('intitule', e.target.value)}
+            className="w-full text-sm border border-emerald-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-colors"
+            placeholder="Ex: Formation React avancé"
+            required
+          />
+        </div>
+
+        
+        <div>
+          <label className="block text-sm font-medium text-emerald-700 mb-1">
+            Type de formation *
+          </label>
+          <select
+            value={formData.type_formation || 'interne'}
+            onChange={(e) => updateField('type_formation', e.target.value)}
+            className="w-full text-sm border border-emerald-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-colors"
+          >
+            <option value="interne">Formation Interne</option>
+            <option value="externe">Formation Externe</option>
+            <option value="autoformation">Autoformation</option>
+          </select>
+        </div>
+
+       
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-emerald-700 mb-1">
+              Date début *
+            </label>
+            <input
+              type="date"
+              value={formData.date_debut || ''}
+              onChange={(e) => updateField('date_debut', e.target.value)}
+              className="w-full text-sm border border-emerald-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-colors"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-emerald-700 mb-1">
+              Date fin *
+            </label>
+            <input
+              type="date"
+              value={formData.date_fin || ''}
+              onChange={(e) => updateField('date_fin', e.target.value)}
+              min={formData.date_debut}
+              className="w-full text-sm border border-emerald-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-colors"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-emerald-700 mb-1">
+              Heures totales *
+            </label>
+            <input
+              type="number"
+              min="0.25"
+              step="0.25"
+              value={formData.heures || 1}
+              onChange={(e) => updateField('heures', parseFloat(e.target.value) || 1)}
+              className="w-full text-sm border border-emerald-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-colors"
+              required
+            />
+          </div>
+        </div>
+
+        
+        <div>
+          <label className="block text-sm font-medium text-emerald-700 mb-1">
+            Description
+          </label>
+          <textarea
+            value={formData.description || ''}
+            onChange={(e) => updateField('description', e.target.value)}
+            className="w-full text-sm border border-emerald-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-colors resize-none"
+            rows={2}
+            placeholder="Description optionnelle de la formation..."
+          />
+        </div>
+
+        
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onCancel();
+            }}
+            className="px-4 py-2 text-emerald-600 hover:text-emerald-800 transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving || !isFormValid()}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            <span>{saving ? 'Création...' : 'Créer la formation'}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface FormationSelectProps {
+  formations: Formation[];
+  selectedFormationId?: number;
+  onSelect: (formation: Formation | undefined) => void;
+  loading: boolean;
+  required?: boolean;
+  onCreateNew?: () => void;
+}
+
+const FormationSelect: React.FC<FormationSelectProps> = ({
+  formations,
+  selectedFormationId,
+  onSelect,
+  loading,
+  required = false,
+  onCreateNew
+}) => {
+  const selectedFormation = formations.find(f => f.id === selectedFormationId);
+
+  if (loading) {
+    return (
+      <div className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 flex items-center">
+        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+        <span className="text-gray-500">Chargement des formations...</span>
+      </div>
+    );
+  }
+
+  // Model de creation d une formation  si aucune formation disponible
+  if (formations.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center text-amber-700">
+              <BookOpen className="w-4 h-4 mr-2" />
+              <span className="text-sm font-medium">Aucune formation disponible</span>
+            </div>
+          </div>
+          <p className="text-sm text-amber-600 mt-1">
+            Vous devez d'abord créer une formation pour pouvoir l'imputer.
+          </p>
+          {onCreateNew && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onCreateNew();
+              }}
+              className="mt-3 flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Créer une formation</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <select
+          value={selectedFormationId || ""}
+          onChange={(e) => {
+            const selected = formations.find(f => f.id === parseInt(e.target.value));
+            onSelect(selected);
+          }}
+          className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-colors"
+          required={required}
+        >
+          <option value="">Sélectionner une formation</option>
+          {formations.map((formation) => (
+            <option key={formation.id} value={formation.id}>
+              {formation.intitule} • {getFormationTypeLabel(formation.type_formation)} • {formation.heures}h
+            </option>
+          ))}
+        </select>
+        
+        {onCreateNew && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onCreateNew();
+            }}
+            className="px-3 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors flex items-center"
+            title="Créer une nouvelle formation"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {selectedFormation && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-medium text-emerald-800">{selectedFormation.intitule}</h4>
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getFormationTypeBadgeColor(selectedFormation.type_formation)}`}>
+              {getFormationTypeLabel(selectedFormation.type_formation)}
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="flex items-center text-emerald-600">
+              <Calendar className="w-4 h-4 mr-1" />
+              <span>
+                {format(new Date(selectedFormation.date_debut), 'dd/MM/yyyy')} - {format(new Date(selectedFormation.date_fin), 'dd/MM/yyyy')}
+              </span>
+            </div>
+            <div className="flex items-center text-emerald-600">
+              <Timer className="w-4 h-4 mr-1" />
+              <span>{selectedFormation.heures}h au total</span>
+            </div>
+          </div>
+
+          {selectedFormation.description && (
+            <div className="mt-2 pt-2 border-t border-emerald-200">
+              <div className="flex items-start text-sm text-emerald-700">
+                <FileText className="w-4 h-4 mr-1 mt-0.5 flex-shrink-0" />
+                <span>{selectedFormation.description}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface NewActivityFormProps {
   date: string;
@@ -98,17 +466,22 @@ interface NewActivityFormProps {
   activityTypes: ActivityType[];
   formId: string;
   projects: Projet[];
+  formations: Formation[];
   loadingProjects: boolean;
+  loadingFormations: boolean;
+  onFormationCreated: (formation: Formation) => void;
 }
 
-const NewActivityForm: React.FC<NewActivityFormProps> = ({ 
-  date, 
-  onSave, 
+const NewActivityForm: React.FC<NewActivityFormProps> = ({
+  date,
+  onSave,
   onCancel,
   activityTypes,
-  formId,
   projects,
-  loadingProjects
+  formations,
+  loadingProjects,
+  loadingFormations,
+  onFormationCreated,
 }) => {
   const [activity, setActivity] = useState<Partial<ImputationHoraire>>({
     date,
@@ -117,9 +490,12 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
     description: "",
   });
   const [saving, setSaving] = useState(false);
+  const [showNewFormationForm, setShowNewFormationForm] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
     setSaving(true);
     try {
       await onSave(activity);
@@ -128,20 +504,89 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
     }
   };
 
-  const selectedActivityType = activityTypes.find(t => t.id === activity.categorie) || activityTypes[0];
+  const handleCreateFormation = async (data: Partial<Formation>): Promise<Formation> => {
+    console.log('NewActivityForm: Creating formation with data:', data);
+    
+    try {
+      
+      const formData = new FormData();
+      formData.append("intitule", data.intitule!);
+      formData.append("type_formation", data.type_formation!);
+      formData.append("description", data.description || "");
+      formData.append("date_debut", data.date_debut!);
+      formData.append("date_fin", data.date_fin!);
+      formData.append("heures", String(data.heures!));
+      if (typeof data.justificatif === "string") {
+        formData.append("justificatif", data.justificatif);
+      }
+
+      
+      
+      
+      const newFormation = await createFormation(formData);
+      
+      console.log('NewActivityForm: Formation created:', newFormation);
+
+     
+      const formationForImputation = {
+        id: newFormation.id,
+        intitule: newFormation.intitule,
+        type: newFormation.type_formation as "interne"|"externe"|"autoformation",
+      };
+
+       
+      setActivity(prev => ({
+        ...prev,
+        formation: formationForImputation
+      }));
+
+      
+      onFormationCreated(newFormation);
+      
+      
+      setShowNewFormationForm(false);
+
+      return newFormation;
+    } catch (error) {
+      console.error('NewActivityForm: Error creating formation:', error);
+      throw error;
+    }
+  };
+
+  const selectedActivityType =
+    activityTypes.find((t) => t.id === activity.categorie) || activityTypes[0];
   const Icon = selectedActivityType.icon;
+
+  const updateField = (field: keyof ImputationHoraire, value: any) =>
+    setActivity((prev) => ({ ...prev, [field]: value }));
+
+  const isFormValid = () => {
+    if (activity.categorie === "projet" && !activity.projet?.id) return false;
+    if (activity.categorie === "formation" && !activity.formation?.id) return false;
+    return true;
+  };
 
   return (
     <div className="p-4 rounded-xl shadow-sm border-l-4 border-amber-200 bg-white mt-4">
       <form onSubmit={handleSubmit}>
+       
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-3">
             <div className={`p-2 rounded-lg ${selectedActivityType.bgColor}`}>
               <Icon className={`w-5 h-5 ${selectedActivityType.textColor}`} />
             </div>
+            
             <select
               value={activity.categorie}
-              onChange={(e) => setActivity({...activity, categorie: e.target.value as ImputationHoraire["categorie"]})}
+              onChange={(e) =>
+                setActivity({
+                  ...activity,
+                  categorie: e.target.value as ImputationHoraire["categorie"],
+                  
+                  projet: undefined,
+                  formation: undefined,
+                })
+              }
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-colors"
             >
               {activityTypes.map((type) => (
@@ -150,47 +595,54 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
                 </option>
               ))}
             </select>
+            <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-lg">
+              Modifiable
+            </span>
           </div>
-          <button
-            type="button"
-            onClick={onCancel}
+          <button 
+            type="button" 
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onCancel();
+            }}
             className="p-2 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
           >
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
 
+        
         <textarea
           value={activity.description || ""}
-          onChange={(e) => setActivity({...activity, description: e.target.value})}
+          onChange={(e) => updateField("description", e.target.value)}
           placeholder="Description de l'activité..."
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 mb-3 focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-colors resize-none"
           rows={2}
           required
         />
 
+        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+         
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Heures
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Heures</label>
             <input
               type="number"
-              min="0"
+              min="0.25"
               max="24"
               step="0.25"
               value={activity.heures || 0}
-              onChange={(e) => setActivity({...activity, heures: parseFloat(e.target.value) || 0})}
+              onChange={(e) => updateField("heures", parseFloat(e.target.value) || 0)}
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-colors"
               required
             />
           </div>
 
+          
           {activity.categorie === "projet" && (
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Projet
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Projet</label>
               {loadingProjects ? (
                 <div className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 flex items-center">
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -201,10 +653,7 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
                   value={activity.projet?.id || ""}
                   onChange={(e) => {
                     const selectedProject = projects.find(p => p.id === parseInt(e.target.value));
-                    setActivity({
-                      ...activity, 
-                      projet: selectedProject || undefined
-                    });
+                    updateField("projet", selectedProject || undefined);
                   }}
                   className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-colors"
                   required
@@ -224,26 +673,50 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
               )}
             </div>
           )}
+
+         
+          {activity.categorie === "formation" && (
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Formation</label>
+              
+              {showNewFormationForm ? (
+                <NewFormationForm
+                  onSave={handleCreateFormation}
+                  onCancel={() => setShowNewFormationForm(false)}
+                />
+              ) : (
+                <FormationSelect
+                  formations={formations}
+                  selectedFormationId={activity.formation?.id}
+                  onSelect={(formation) => updateField("formation", formation)}
+                  loading={loadingFormations}
+                  required
+                  onCreateNew={() => setShowNewFormationForm(true)}
+                />
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="mt-3 flex justify-end space-x-3">
-          <button
-            type="button"
-            onClick={onCancel}
+        
+        <div className="mt-3 flex justify-end gap-3">
+          <button 
+            type="button" 
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onCancel();
+            }}
             className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
           >
             Annuler
           </button>
           <button
             type="submit"
-            className="flex items-center space-x-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
-            disabled={saving || (activity.categorie === "projet" && !activity.projet?.id)}
+            disabled={saving || !isFormValid()}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
           >
-            {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             <span>Sauvegarder</span>
           </button>
         </div>
@@ -267,9 +740,11 @@ const HistoryView: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [addingActivities, setAddingActivities] = useState<{ [date: string]: string[] }>({});
   
-  // Nouveaux états pour les projets
+
   const [projects, setProjects] = useState<Projet[]>([]);
+  const [formations, setFormations] = useState<Formation[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
+  const [loadingFormations, setLoadingFormations] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -277,10 +752,11 @@ const HistoryView: React.FC = () => {
         setError(null);
         setLoading(true);
         
-        // Charger les règles globales et les projets en parallèle
-        const [rules, projectsData] = await Promise.all([
+        
+        const [rules] = await Promise.all([
           fetchGlobalRulesApi(),
-          loadProjects()
+          loadProjects(),
+          loadFormations()
         ]);
         
         setGlobalRules(rules);
@@ -345,6 +821,28 @@ const HistoryView: React.FC = () => {
     }
   };
 
+  // Fonction pour charger les formations
+  const loadFormations = async (): Promise<Formation[]> => {
+    try {
+      setLoadingFormations(true);
+      const formationsData = await fetchEmployeeTrainings();
+      setFormations(formationsData);
+      return formationsData;
+    } catch (err) {
+      console.error("Erreur chargement des formations:", err);
+      setFormations([]);
+      return [];
+    } finally {
+      setLoadingFormations(false);
+    }
+  };
+
+
+  const handleFormationCreated = (newFormation: Formation) => {
+    console.log('HistoryView: New formation created:', newFormation);
+    setFormations(prev => [...prev, newFormation]);
+  };
+
   const isWorkingDay = (date: Date, rules?: GlobalRules): boolean => {
     const effectiveRules = rules || globalRules;
     if (!effectiveRules) return false;
@@ -404,6 +902,7 @@ const HistoryView: React.FC = () => {
           email: user?.email ?? "",
         },
         projet: activity.categorie === 'projet' ? activity.projet : undefined,
+        formation: activity.categorie === "formation" ? activity.formation : undefined,
         categorie: activity.categorie || 'projet',
         valide_par: undefined,
         date_validation: undefined
@@ -472,14 +971,15 @@ const HistoryView: React.FC = () => {
     }
   };
 
-  const calculateDayTotal = (date: Date): number => {
-    const dateKey = format(date, "yyyy-MM-dd");
-    const dayActivities = activities[dateKey] || [];
-    return dayActivities.reduce(
-      (sum, item) => sum + (item.heures || 0),
-      0
-    );
-  };
+ const calculateDayTotal = (date: Date): number => {
+  const dateKey = format(date, "yyyy-MM-dd");
+  const dayActivities = activities[dateKey] || [];
+  return dayActivities.reduce((sum, item) => {
+    
+    const heuresNum = parseFloat(String(item.heures || 0));
+    return sum + (isNaN(heuresNum) ? 0 : heuresNum);
+  }, 0);
+};
 
   const calculateWeekTotal = (): number => {
     return currentWeek.reduce(
@@ -703,7 +1203,10 @@ const HistoryView: React.FC = () => {
                               onCancel={() => handleCancelForm(dateKey, formId)}
                               activityTypes={activityTypes}
                               projects={projects}
+                              formations={formations}
                               loadingProjects={loadingProjects}
+                              loadingFormations={loadingFormations}
+                              onFormationCreated={handleFormationCreated}
                             />
                           ))}
                           
@@ -727,6 +1230,7 @@ const HistoryView: React.FC = () => {
                                         className={`w-5 h-5 ${activityType.textColor}`}
                                       />
                                     </div>
+                                   
                                     <select
                                       value={activity.categorie}
                                       onChange={(e) =>
@@ -737,7 +1241,10 @@ const HistoryView: React.FC = () => {
                                           e.target.value
                                         )
                                       }
-                                      className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-colors"
+                                      disabled={true} // desacticer apres la creation
+
+                                      className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 text-gray-500 cursor-not-allowed"
+                                      title="Impossible de modifier le type après création"
                                     >
                                       {activityTypes.map((type) => (
                                         <option key={type.id} value={type.id}>
@@ -745,6 +1252,9 @@ const HistoryView: React.FC = () => {
                                         </option>
                                       ))}
                                     </select>
+                                    <span className="text-xs text-red-600 bg-red-100 px-2 py-1 rounded-lg">
+                                      Type verrouillé
+                                    </span>
                                   </div>
                                   <div className="flex items-center space-x-2">
                                     <button
@@ -824,6 +1334,25 @@ const HistoryView: React.FC = () => {
                                           </option>
                                         ))}
                                       </select>
+                                    </div>
+                                  )}
+
+                                  {activity.categorie === "formation" && (
+                                    <div className="col-span-2">
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Formation
+                                      </label>
+                                      <FormationSelect
+                                        formations={formations}
+                                        selectedFormationId={activity.formation?.id}
+                                        onSelect={(formation) => handleUpdateActivity(
+                                          day,
+                                          activity.id,
+                                          "formation",
+                                          formation
+                                        )}
+                                        loading={loadingFormations}
+                                      />
                                     </div>
                                   )}
                                 </div>
