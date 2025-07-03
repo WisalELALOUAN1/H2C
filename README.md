@@ -11,27 +11,28 @@ Ce projet comprend :
 
 ## 📁 Structure du projet
 
-racine/
+```bash
+H2C/
+├── backend/               # API Django REST Framework
+│   ├── apps/
+│   │   ├── authentication/  # Authentification
+│   │   ├── gestionCongesEtAbsence/   # Module congés
+│   │   ├── gestionImputations/ # Module imputations
+│   │   └── gestionUtilisateurs/  #  Module de gestion des utilisateurs/equipes
+│   ├── manage.py
+│   └── .env
 │
-├── backend/ # API Django (DRF)
-│ ├── manage.py
-│ ├── .env
-│ ├── authentication/
-│ ├── gestionCongesEtAbsences/
-│ ├── gestionImputations/
-│ ├── gestionUtilisateurs/
-│ └── ...
-│
-├── frontend/ # App React (Vite/TS)
-│ ├── src/
-│ │ ├── components/
-│ │ ├── contexts/
-│ │ ├── services/
-│ │ └── types/
-│ ├── public/
-│ ├── package.json
-│ └── ...
-
+└── frontend/              # Application React (Vite + TypeScript)
+    ├── src/
+    │   ├── api/           # Services API
+    │   ├── components/    # Composants UI
+    │   ├── contexts/      # Contextes React
+    │   ├── pages/         # Pages de l'application
+    │   ├── types/         # Types TypeScript
+    │   └── services/         # Connexion avec le backend
+    ├── public/
+    ├── package.json
+    └── vite.config.ts
 
 
 **🛠 Installation & Lancement local:**
@@ -71,7 +72,7 @@ Frontend React : http://localhost:5173
 
 # 🧩 Détail technique
 Backend
-Python 3.10+
+Python 3.12+
 
 Django 5+
 
@@ -84,9 +85,10 @@ Gestion : Utilisateurs, Imputations, Projets, Formations, Absences/Présences
 Swagger docs générées automatiquement
 
 Frontend
-React 18+ (Vite)
+Node JS v20.12.2
+npm 10.5.0
 
-TypeScript
+
 
 UI moderne : Tailwind, shadcn, lucide-react
 
@@ -95,7 +97,7 @@ Auth/Context, API centralisée (src/services/api.ts)
 Composants modulaires : Dashboard, Formulaires, Synthèse mensuelle, etc.
 
 
-Déploiement (prod) : à faire via Docker, ou sur un VPS
+Déploiement (prod) : à faire via Docker
 
 Base de données : par défaut SQLite, mais prêt pour Postgres/MySQL
 
