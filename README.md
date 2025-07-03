@@ -1,4 +1,4 @@
-# 🚀 H2C - Plateforme RH : Gestion Congés, Imputations, Formations
+#  H2C - Plateforme RH : Gestion Congés, Imputations, Formations
 
 Bienvenue sur H2C, une application web complète de gestion des ressources humaines (absences, congés, imputations horaires, équipes ...).
 
@@ -9,7 +9,7 @@ Ce projet comprend :
 
 ---
 
-## 📁 Structure du projet
+##  Structure du projet
 
 ```bash
 H2C/
@@ -38,8 +38,9 @@ H2C/
 
 
 
+# Installation & Lancement local:
 
-**🛠 Installation & Lancement local:**
+
 
 
 
@@ -62,15 +63,15 @@ Le backend est accessible sur : http://localhost:8000
 
 cd ../frontend
 
-# Installer les dépendances
+## Installer les dépendances
 npm install
 
-# Lancer le serveur de développement
+## Lancer le serveur de développement
 npm run dev
 
 Le frontend est accessible sur : http://localhost:5173
 
-# 🌐 URLs Utiles
+#  URLs Utiles
 API Admin Django : http://localhost:8000/admin/
 
 Docs Swagger API : http://localhost:8000/api/docs/
@@ -78,7 +79,7 @@ Docs Swagger API : http://localhost:8000/api/docs/
 Frontend React : http://localhost:5173
 
 
-# 🧩 Détail technique
+#  Détail technique
 Backend
 Python 3.12+
 
@@ -113,8 +114,8 @@ Tests : Django (backend), React Testing Library (frontend)
 
 
 
-👤 
-EL ALOUAN WISAL
+
+
 
 
 
