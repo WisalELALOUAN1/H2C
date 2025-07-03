@@ -137,7 +137,16 @@ const WeeklyImputationsTab: React.FC<{
   if (loading) return <LoadingSpinner />;
   if (!weekImputations) return <div className="text-center py-12 text-gray-500">Aucune donnée</div>;
 
-  const totalHours = weekImputations.imputations.reduce((sum, imp) => sum + (imp.heures || 0), 0);
+  const totalHours = weekImputations.imputations.reduce((sum, imp) => {
+  console.log(
+    '[REDUCE] sum:', sum,
+    'imp.heures:', imp.heures,
+    'typeof imp.heures:', typeof imp.heures
+  );
+  return sum + Number(imp.heures || 0);
+}, 0);
+
+console.log('[RESULTAT] totalHours:', totalHours, 'type:', typeof totalHours);
 
   return (
     <div className="space-y-6">
@@ -160,7 +169,7 @@ const WeeklyImputationsTab: React.FC<{
           <th className="px-6 py-4 text-left">Date</th>
           <th className="px-6 py-4 text-left">Activité</th>
           <th className="px-6 py-4 text-left">Heures</th>
-          <th className="px-6 py-4 text-left">Catégorie</th>
+          
         </tr>
       </thead>
 
@@ -207,17 +216,7 @@ const WeeklyImputationsTab: React.FC<{
         <td className={`px-6 py-4 font-bold ${hoursColor}`}>
           {Number(imputation.heures || 0).toFixed(1)}h
         </td>
-        <td className="px-6 py-4">
-          <span className={`px-3 py-1 rounded-full text-sm ${
-            categoryStyle[imputation.categorie as keyof typeof categoryStyle] || 
-            categoryStyle.default
-          }`}>
-            {imputation.categorie === 'projet' ? 'Projet' : 
-             imputation.categorie === 'formation' ? 'Formation' :
-             imputation.categorie === 'absence' ? 'Absence' :
-             imputation.categorie === 'admin' ? 'Admin' : 'Autre'}
-          </span>
-        </td>
+        
       </tr>
     );
   })}
@@ -233,15 +232,7 @@ const WeeklyImputationsTab: React.FC<{
             <StatusBadge status={weekImputations.semaine_status} />
           </div>
           
-          {weekImputations.semaine_status === 'brouillon' && (
-            <button
-              onClick={onSubmitWeek}
-              disabled={loading}
-              className="bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-3 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all shadow-lg hover:shadow-xl disabled:opacity-50"
-            >
-              Soumettre
-            </button>
-          )}
+          
         </div>
       </div>
     </div>
@@ -488,7 +479,7 @@ const EmployeeDashboard: React.FC = () => {
     }
   };
 
-  const totalHours = weekImputations?.imputations.reduce((sum, imp) => sum + (imp.heures || 0), 0) || 0;
+  const totalHours = weekImputations?.imputations.reduce((sum, imp) => sum + Number(imp.heures || 0), 0) || 0;
   const uniqueProjectsCount = weekImputations?.imputations.reduce((acc, imp) => {
   if (imp.categorie === 'projet' && imp.projet?.nom) {
     acc.add(imp.projet.nom);
