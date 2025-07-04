@@ -21,6 +21,12 @@ import {
   Timer,
   Upload,
   X,
+  Send,
+  Eye,
+  AlertCircle,
+  XCircle,
+  Download,
+  BarChart3,
 } from "lucide-react";
 import { eachDayOfInterval, format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -41,6 +47,7 @@ import type {
   Formation
 } from "../../types";
 import { useAuth } from "../../contexts/AuthContext";
+import { generatePDFReport } from "../../utils/pdfExport"
 
 interface ActivityType {
   id: string;
@@ -52,8 +59,16 @@ interface ActivityType {
   textColor: string;
 }
 
+interface WeekStatus {
+  status: 'draft' | 'submitted' | 'validated' | 'rejected';
+  submittedAt?: string;
+  validatedAt?: string;
+  validatedBy?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+}
+
 const activityTypes: ActivityType[] = [
-  
   {
     id: "reunion",
     label: "Réunion",
@@ -104,7 +119,7 @@ const activityTypes: ActivityType[] = [
 const getFormationTypeLabel = (type: string): string => {
   const labels = {
     'interne': 'Formation Interne',
-    'externe': 'Formation Externe', 
+    'externe': 'Formation Externe',
     'autoformation': 'Autoformation'
   };
   return labels[type as keyof typeof labels] || type;
@@ -143,7 +158,6 @@ const NewFormationForm: React.FC<NewFormationFormProps> = ({
   const handleSubmit = async (e: React.MouseEvent | React.KeyboardEvent) => {
     console.log('NewFormationForm: Form submitted');
     
-    //fixed 
     e.preventDefault();
     e.stopPropagation();
     
@@ -179,10 +193,10 @@ const NewFormationForm: React.FC<NewFormationFormProps> = ({
 
   const isFormValid = () => {
     const valid = !!(
-      formData.intitule?.trim() && 
-      formData.date_debut && 
-      formData.date_fin && 
-      formData.heures && 
+      formData.intitule?.trim() &&
+      formData.date_debut &&
+      formData.date_fin &&
+      formData.heures &&
       formData.heures > 0
     );
     console.log('Form validation result:', valid, formData);
@@ -210,7 +224,6 @@ const NewFormationForm: React.FC<NewFormationFormProps> = ({
       </div>
 
       <div className="space-y-3" onKeyDown={handleKeyDown}>
-       
         <div>
           <label className="block text-sm font-medium text-emerald-700 mb-1">
             Intitulé de la formation *
@@ -225,7 +238,6 @@ const NewFormationForm: React.FC<NewFormationFormProps> = ({
           />
         </div>
 
-        
         <div>
           <label className="block text-sm font-medium text-emerald-700 mb-1">
             Type de formation *
@@ -241,7 +253,6 @@ const NewFormationForm: React.FC<NewFormationFormProps> = ({
           </select>
         </div>
 
-       
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="block text-sm font-medium text-emerald-700 mb-1">
@@ -284,7 +295,6 @@ const NewFormationForm: React.FC<NewFormationFormProps> = ({
           </div>
         </div>
 
-        
         <div>
           <label className="block text-sm font-medium text-emerald-700 mb-1">
             Description
@@ -298,7 +308,6 @@ const NewFormationForm: React.FC<NewFormationFormProps> = ({
           />
         </div>
 
-        
         <div className="flex justify-end gap-3 pt-2">
           <button
             type="button"
@@ -354,7 +363,6 @@ const FormationSelect: React.FC<FormationSelectProps> = ({
     );
   }
 
-  // Model de creation d une formation  si aucune formation disponible
   if (formations.length === 0) {
     return (
       <div className="space-y-3">
@@ -470,6 +478,7 @@ interface NewActivityFormProps {
   loadingProjects: boolean;
   loadingFormations: boolean;
   onFormationCreated: (formation: Formation) => void;
+  disabled?: boolean;
 }
 
 const NewActivityForm: React.FC<NewActivityFormProps> = ({
@@ -482,6 +491,7 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
   loadingProjects,
   loadingFormations,
   onFormationCreated,
+  disabled = false,
 }) => {
   const [activity, setActivity] = useState<Partial<ImputationHoraire>>({
     date,
@@ -508,7 +518,6 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
     console.log('NewActivityForm: Creating formation with data:', data);
     
     try {
-      
       const formData = new FormData();
       formData.append("intitule", data.intitule!);
       formData.append("type_formation", data.type_formation!);
@@ -520,30 +529,22 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
         formData.append("justificatif", data.justificatif);
       }
 
-      
-      
-      
       const newFormation = await createFormation(formData);
       
       console.log('NewActivityForm: Formation created:', newFormation);
 
-     
       const formationForImputation = {
         id: newFormation.id,
         intitule: newFormation.intitule,
         type: newFormation.type_formation as "interne"|"externe"|"autoformation",
       };
 
-       
       setActivity(prev => ({
         ...prev,
         formation: formationForImputation
       }));
 
-      
       onFormationCreated(newFormation);
-      
-      
       setShowNewFormationForm(false);
 
       return newFormation;
@@ -566,10 +567,20 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
     return true;
   };
 
+  if (disabled) {
+    return (
+      <div className="p-4 rounded-xl shadow-sm border-l-4 border-gray-200 bg-gray-50 mt-4">
+        <div className="text-center text-gray-500">
+          <AlertCircle className="w-8 h-8 mx-auto mb-2" />
+          <p>Modification non autorisée - Feuille de temps soumise ou validée</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 rounded-xl shadow-sm border-l-4 border-amber-200 bg-white mt-4">
       <form onSubmit={handleSubmit}>
-       
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-3">
             <div className={`p-2 rounded-lg ${selectedActivityType.bgColor}`}>
@@ -582,7 +593,6 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
                 setActivity({
                   ...activity,
                   categorie: e.target.value as ImputationHoraire["categorie"],
-                  
                   projet: undefined,
                   formation: undefined,
                 })
@@ -612,7 +622,6 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
           </button>
         </div>
 
-        
         <textarea
           value={activity.description || ""}
           onChange={(e) => updateField("description", e.target.value)}
@@ -622,9 +631,7 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
           required
         />
 
-        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-         
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Heures</label>
             <input
@@ -639,7 +646,6 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
             />
           </div>
 
-          
           {activity.categorie === "projet" && (
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Projet</label>
@@ -674,7 +680,6 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
             </div>
           )}
 
-         
           {activity.categorie === "formation" && (
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Formation</label>
@@ -698,7 +703,6 @@ const NewActivityForm: React.FC<NewActivityFormProps> = ({
           )}
         </div>
 
-        
         <div className="mt-3 flex justify-end gap-3">
           <button 
             type="button" 
@@ -739,7 +743,13 @@ const HistoryView: React.FC = () => {
   );
   const [saving, setSaving] = useState(false);
   const [addingActivities, setAddingActivities] = useState<{ [date: string]: string[] }>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   
+  // Mock week status - in real app, this would come from API
+  const [weekStatus, setWeekStatus] = useState<WeekStatus>({
+    status: 'draft'
+  });
 
   const [projects, setProjects] = useState<Projet[]>([]);
   const [formations, setFormations] = useState<Formation[]>([]);
@@ -751,7 +761,6 @@ const HistoryView: React.FC = () => {
       try {
         setError(null);
         setLoading(true);
-        
         
         const [rules] = await Promise.all([
           fetchGlobalRulesApi(),
@@ -805,7 +814,6 @@ const HistoryView: React.FC = () => {
     loadData();
   }, []);
 
-  // Fonction pour charger les projets
   const loadProjects = async (): Promise<Projet[]> => {
     try {
       setLoadingProjects(true);
@@ -821,7 +829,6 @@ const HistoryView: React.FC = () => {
     }
   };
 
-  // Fonction pour charger les formations
   const loadFormations = async (): Promise<Formation[]> => {
     try {
       setLoadingFormations(true);
@@ -836,7 +843,6 @@ const HistoryView: React.FC = () => {
       setLoadingFormations(false);
     }
   };
-
 
   const handleFormationCreated = (newFormation: Formation) => {
     console.log('HistoryView: New formation created:', newFormation);
@@ -860,6 +866,8 @@ const HistoryView: React.FC = () => {
   };
 
   const handleAddClick = (date: Date) => {
+    if (weekStatus.status !== 'draft') return;
+    
     const dateKey = format(date, "yyyy-MM-dd");
     const newFormId = `form-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -870,6 +878,8 @@ const HistoryView: React.FC = () => {
   };
 
   const handleDuplicateActivity = (date: Date, activity: ImputationHoraire) => {
+    if (weekStatus.status !== 'draft') return;
+    
     const dateKey = format(date, "yyyy-MM-dd");
     const newFormId = `form-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -933,6 +943,8 @@ const HistoryView: React.FC = () => {
     field: keyof ImputationHoraire,
     value: any
   ) => {
+    if (weekStatus.status !== 'draft') return;
+    
     const dateKey = format(date, "yyyy-MM-dd");
     try {
       setSaving(true);
@@ -955,6 +967,8 @@ const HistoryView: React.FC = () => {
   };
 
   const handleDeleteActivity = async (date: Date, id: number) => {
+    if (weekStatus.status !== 'draft') return;
+    
     const dateKey = format(date, "yyyy-MM-dd");
     try {
       await deleteImputation(id);
@@ -971,15 +985,14 @@ const HistoryView: React.FC = () => {
     }
   };
 
- const calculateDayTotal = (date: Date): number => {
-  const dateKey = format(date, "yyyy-MM-dd");
-  const dayActivities = activities[dateKey] || [];
-  return dayActivities.reduce((sum, item) => {
-    
-    const heuresNum = parseFloat(String(item.heures || 0));
-    return sum + (isNaN(heuresNum) ? 0 : heuresNum);
-  }, 0);
-};
+  const calculateDayTotal = (date: Date): number => {
+    const dateKey = format(date, "yyyy-MM-dd");
+    const dayActivities = activities[dateKey] || [];
+    return dayActivities.reduce((sum, item) => {
+      const heuresNum = parseFloat(String(item.heures || 0));
+      return sum + (isNaN(heuresNum) ? 0 : heuresNum);
+    }, 0);
+  };
 
   const calculateWeekTotal = (): number => {
     return currentWeek.reduce(
@@ -1013,6 +1026,228 @@ const HistoryView: React.FC = () => {
     if (!globalRules.jours_ouvrables.includes(dayName)) return "weekend";
     return "working";
   };
+
+  // Submit week functionality
+  const handleSubmitWeek = async () => {
+    setSubmitting(true);
+    try {
+      // In real app, this would call an API to submit the week
+      // await submitWeeklyTimesheet(weekData);
+      
+      setWeekStatus({
+        status: 'submitted',
+        submittedAt: new Date().toISOString()
+      });
+      
+      console.log('Semaine soumise avec succès');
+    } catch (err) {
+      console.error('Erreur lors de la soumission:', err);
+      setError('Erreur lors de la soumission de la semaine');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Export CSV functionality
+  const handleExportCSV = () => {
+    setExporting(true);
+    try {
+      const csvData = generateCSVData();
+      downloadCSV(csvData);
+    } catch (err) {
+      console.error('Erreur lors de l\'export CSV:', err);
+      setError('Erreur lors de l\'export CSV');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const generateCSVData = () => {
+    const headers = ['Date', 'Jour', 'Catégorie', 'Projet/Formation', 'Description', 'Heures'];
+    const rows = [headers];
+
+    currentWeek.forEach(day => {
+      const dateKey = format(day, "yyyy-MM-dd");
+      const dayActivities = activities[dateKey] || [];
+      const dayName = format(day, "EEEE", { locale: fr });
+
+      if (dayActivities.length === 0 && isWorkingDay(day)) {
+        rows.push([
+          format(day, 'dd/MM/yyyy'),
+          dayName,
+          '',
+          '',
+          '',
+          '0'
+        ]);
+      } else {
+        dayActivities.forEach(activity => {
+          const projectOrFormation = activity.categorie === 'projet' 
+            ? (activity.projet?.nom || 'Non spécifié')
+            : activity.categorie === 'formation'
+            ? (activity.formation?.type || 'Non spécifié')
+            : activity.categorie;
+
+          rows.push([
+            format(day, 'dd/MM/yyyy'),
+            dayName,
+            activityTypes.find(t => t.id === activity.categorie)?.label || activity.categorie,
+            projectOrFormation,
+            (activity.description || '').replace(/"/g, '""'),
+            activity.heures?.toString() || '0'
+          ]);
+        });
+      }
+    });
+
+    return rows;
+  };
+
+  const downloadCSV = (data: string[][]) => {
+    const csvContent = data.map(row => 
+      row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      
+      const weekStart = currentWeek[0];
+      const weekEnd = currentWeek[currentWeek.length - 1];
+      const fileName = `imputation_${format(weekStart, 'dd-MM')}_au_${format(weekEnd, 'dd-MM-yyyy')}.csv`;
+      
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  // Export PDF functionality
+  const handleExportPDF = async () => {
+    setExporting(true);
+    try {
+      const pdfData = generatePDFData();
+      await generatePDFReport(pdfData);
+    } catch (err) {
+      console.error('Erreur lors de l\'export PDF:', err);
+      setError('Erreur lors de l\'export PDF');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const generatePDFData = () => {
+    const weekStart = currentWeek[0];
+    const weekEnd = currentWeek[currentWeek.length - 1];
+    const weekDates = `${format(weekStart, 'dd/MM', { locale: fr })} au ${format(weekEnd, 'dd/MM/yyyy', { locale: fr })}`;
+
+    // Calculate daily hours
+    const dailyHours: { [date: string]: number } = {};
+    currentWeek.forEach(day => {
+      if (isWorkingDay(day)) {
+        const dateKey = format(day, "yyyy-MM-dd");
+        dailyHours[dateKey] = calculateDayTotal(day);
+      }
+    });
+
+    // Calculate project distribution
+    const projectDistribution: { [project: string]: number } = {};
+    Object.values(activities).flat().forEach(activity => {
+      if (activity.categorie === 'projet' && activity.projet) {
+        const projectName = activity.projet.nom;
+        projectDistribution[projectName] = (projectDistribution[projectName] || 0) + (activity.heures || 0);
+      }
+    });
+
+    // Calculate category distribution
+    const categoryDistribution: { [category: string]: number } = {};
+    Object.values(activities).flat().forEach(activity => {
+      const categoryLabel = activityTypes.find(t => t.id === activity.categorie)?.label || activity.categorie;
+      categoryDistribution[categoryLabel] = (categoryDistribution[categoryLabel] || 0) + (activity.heures || 0);
+    });
+
+    // Prepare activities data
+    const activitiesData: Array<{
+      date: string;
+      day: string;
+      category: string;
+      projectOrFormation: string;
+      description: string;
+      hours: number;
+    }> = [];
+
+    currentWeek.forEach(day => {
+      const dateKey = format(day, "yyyy-MM-dd");
+      const dayActivities = activities[dateKey] || [];
+      
+      dayActivities.forEach(activity => {
+        const projectOrFormation = activity.categorie === 'projet' 
+          ? (activity.projet?.nom || 'Non spécifié')
+          : activity.categorie === 'formation'
+          ? (activity.formation?.intitule || 'Non spécifié')
+          : activityTypes.find(t => t.id === activity.categorie)?.label || activity.categorie;
+
+        activitiesData.push({
+          date: dateKey,
+          day: format(day, "EEEE", { locale: fr }),
+          category: activityTypes.find(t => t.id === activity.categorie)?.label || activity.categorie,
+          projectOrFormation,
+          description: activity.description || '',
+          hours: activity.heures || 0
+        });
+      });
+    });
+
+    return {
+      weekDates,
+      totalHours: calculateWeekTotal(),
+      workingDays: currentWeek.filter(day => getDayStatus(day) === "working").length,
+      totalActivities: Object.values(activities).flat().length,
+      dailyHours,
+      projectDistribution,
+      categoryDistribution,
+      activities: activitiesData
+    };
+  };
+
+  // Status display helpers
+  const getStatusIcon = (status: WeekStatus['status']) => {
+    switch (status) {
+      case 'draft': return Clock;
+      case 'submitted': return Send;
+      case 'validated': return CheckCircle;
+      case 'rejected': return XCircle;
+      default: return Clock;
+    }
+  };
+
+  const getStatusColor = (status: WeekStatus['status']) => {
+    switch (status) {
+      case 'draft': return 'text-amber-600 bg-amber-100';
+      case 'submitted': return 'text-blue-600 bg-blue-100';
+      case 'validated': return 'text-green-600 bg-green-100';
+      case 'rejected': return 'text-red-600 bg-red-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getStatusLabel = (status: WeekStatus['status']) => {
+    switch (status) {
+      case 'draft': return 'Brouillon';
+      case 'submitted': return 'Soumise';
+      case 'validated': return 'Validée';
+      case 'rejected': return 'Rejetée';
+      default: return 'Inconnu';
+    }
+  };
+
+  const canEdit = weekStatus.status === 'draft';
+  const canSubmit = weekStatus.status === 'draft' && calculateWeekTotal() > 0;
 
   if (loading) {
     return (
@@ -1055,6 +1290,8 @@ const HistoryView: React.FC = () => {
     );
   }
 
+  const StatusIcon = getStatusIcon(weekStatus.status);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-4 md:p-6">
       <div className="max-w-5xl mx-auto">
@@ -1083,6 +1320,96 @@ const HistoryView: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Week Status and Actions */}
+          <div className="mt-6 flex flex-col md:flex-row items-center justify-center gap-4">
+            {/* Status Display */}
+            <div className={`inline-flex items-center px-4 py-2 rounded-xl font-medium ${getStatusColor(weekStatus.status)}`}>
+              <StatusIcon className="w-5 h-5 mr-2" />
+              <span>Statut: {getStatusLabel(weekStatus.status)}</span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3">
+              {/* Submit Button */}
+              {canSubmit && (
+                <button
+                  onClick={handleSubmitWeek}
+                  disabled={submitting}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 disabled:opacity-50 transition-colors shadow-md"
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  <span className="hidden md:inline">{submitting ? 'Soumission...' : 'Soumettre la semaine'}</span>
+                  <span className="md:hidden">{submitting ? 'Soumission...' : 'Soumettre'}</span>
+                </button>
+              )}
+
+              {/* Export CSV Button */}
+              <button
+                onClick={handleExportCSV}
+                disabled={exporting}
+                className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 disabled:opacity-50 transition-colors shadow-md"
+              >
+                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                <span className="hidden md:inline">Export CSV</span>
+                <span className="md:hidden">CSV</span>
+              </button>
+
+              {/* Export PDF Button */}
+              <button
+                onClick={handleExportPDF}
+                disabled={exporting}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-xl hover:bg-purple-600 disabled:opacity-50 transition-colors shadow-md"
+              >
+                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
+                <span className="hidden md:inline">Export PDF</span>
+                <span className="md:hidden">PDF</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Status Messages */}
+          {weekStatus.status === 'submitted' && (
+            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-3 max-w-md mx-auto">
+              <div className="flex items-center text-blue-700">
+                <Eye className="w-4 h-4 mr-2" />
+                <span className="text-sm">Feuille de temps en attente de validation</span>
+              </div>
+              {weekStatus.submittedAt && (
+                <div className="text-xs text-blue-600 mt-1">
+                  Soumise le {format(new Date(weekStatus.submittedAt), 'dd/MM/yyyy à HH:mm', { locale: fr })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {weekStatus.status === 'validated' && (
+            <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-3 max-w-md mx-auto">
+              <div className="flex items-center text-green-700">
+                <CheckCircle className="w-4 h-4 mr-2" />
+                <span className="text-sm">Feuille de temps validée</span>
+              </div>
+              {weekStatus.validatedAt && weekStatus.validatedBy && (
+                <div className="text-xs text-green-600 mt-1">
+                  Validée le {format(new Date(weekStatus.validatedAt), 'dd/MM/yyyy à HH:mm', { locale: fr })} par {weekStatus.validatedBy}
+                </div>
+              )}
+            </div>
+          )}
+
+          {weekStatus.status === 'rejected' && (
+            <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3 max-w-md mx-auto">
+              <div className="flex items-center text-red-700">
+                <XCircle className="w-4 h-4 mr-2" />
+                <span className="text-sm">Feuille de temps rejetée</span>
+              </div>
+              {weekStatus.rejectionReason && (
+                <div className="text-xs text-red-600 mt-1">
+                  Motif: {weekStatus.rejectionReason}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mt-6 bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-lg border border-amber-200 max-w-md mx-auto">
             <div className="text-center">
@@ -1169,13 +1496,15 @@ const HistoryView: React.FC = () => {
                             <ChevronDown className="w-5 h-5 text-amber-600 group-hover:text-amber-700" />
                           )}
                         </button>
-                        <button
-                          onClick={() => handleAddClick(day)}
-                          className="flex items-center space-x-2 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
-                        >
-                          <Plus className="w-5 h-5" />
-                          <span className="font-medium">Ajouter</span>
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => handleAddClick(day)}
+                            className="flex items-center space-x-2 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
+                          >
+                            <Plus className="w-5 h-5" />
+                            <span className="font-medium">Ajouter</span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1189,7 +1518,7 @@ const HistoryView: React.FC = () => {
                             Aucune activité enregistrée
                           </div>
                           <div className="text-amber-400 text-sm mt-1">
-                            Cliquez sur "Ajouter" pour commencer
+                            {canEdit ? "Cliquez sur \"Ajouter\" pour commencer" : "Aucune activité pour ce jour"}
                           </div>
                         </div>
                       ) : (
@@ -1207,6 +1536,7 @@ const HistoryView: React.FC = () => {
                               loadingProjects={loadingProjects}
                               loadingFormations={loadingFormations}
                               onFormationCreated={handleFormationCreated}
+                              disabled={!canEdit}
                             />
                           ))}
                           
@@ -1219,7 +1549,7 @@ const HistoryView: React.FC = () => {
                             return (
                               <div
                                 key={activity.id}
-                                className={`p-4 rounded-xl shadow-sm border-l-4 bg-white hover:shadow-md transition-all duration-200 ${activityType.borderColor}`}
+                                className={`p-4 rounded-xl shadow-sm border-l-4 bg-white hover:shadow-md transition-all duration-200 ${activityType.borderColor} ${!canEdit ? 'opacity-75' : ''}`}
                               >
                                 <div className="flex items-center justify-between mb-3">
                                   <div className="flex items-center space-x-3">
@@ -1241,8 +1571,7 @@ const HistoryView: React.FC = () => {
                                           e.target.value
                                         )
                                       }
-                                      disabled={true} // desacticer apres la creation
-
+                                      disabled={true}
                                       className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 text-gray-500 cursor-not-allowed"
                                       title="Impossible de modifier le type après création"
                                     >
@@ -1256,21 +1585,23 @@ const HistoryView: React.FC = () => {
                                       Type verrouillé
                                     </span>
                                   </div>
-                                  <div className="flex items-center space-x-2">
-                                    <button
-                                      onClick={() => handleDuplicateActivity(day, activity)}
-                                      className="p-2 rounded-lg text-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-all duration-200"
-                                      title="Dupliquer cette activité"
-                                    >
-                                      <Copy className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteActivity(day, activity.id)}
-                                      className="p-2 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  </div>
+                                  {canEdit && (
+                                    <div className="flex items-center space-x-2">
+                                      <button
+                                        onClick={() => handleDuplicateActivity(day, activity)}
+                                        className="p-2 rounded-lg text-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-all duration-200"
+                                        title="Dupliquer cette activité"
+                                      >
+                                        <Copy className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteActivity(day, activity.id)}
+                                        className="p-2 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
 
                                 <textarea
@@ -1282,8 +1613,9 @@ const HistoryView: React.FC = () => {
                                     e.target.value
                                   )}
                                   placeholder="Description de l'activité..."
-                                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 mb-3 focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-colors resize-none"
+                                  className={`w-full text-sm border border-gray-200 rounded-lg px-3 py-2 mb-3 focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-colors resize-none ${!canEdit ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                                   rows={2}
+                                  disabled={!canEdit}
                                 />
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1305,7 +1637,8 @@ const HistoryView: React.FC = () => {
                                           parseFloat(e.target.value) || 0
                                         )
                                       }
-                                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-colors"
+                                      className={`w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-colors ${!canEdit ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                                      disabled={!canEdit}
                                     />
                                   </div>
 
@@ -1325,7 +1658,8 @@ const HistoryView: React.FC = () => {
                                             selectedProject || undefined
                                           );
                                         }}
-                                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-colors"
+                                        className={`w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-400 transition-colors ${!canEdit ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                                        disabled={!canEdit}
                                       >
                                         <option value="">Sélectionner un projet</option>
                                         {projects.map((project) => (
@@ -1345,7 +1679,7 @@ const HistoryView: React.FC = () => {
                                       <FormationSelect
                                         formations={formations}
                                         selectedFormationId={activity.formation?.id}
-                                        onSelect={(formation) => handleUpdateActivity(
+                                        onSelect={(formation) => canEdit && handleUpdateActivity(
                                           day,
                                           activity.id,
                                           "formation",
@@ -1357,20 +1691,22 @@ const HistoryView: React.FC = () => {
                                   )}
                                 </div>
 
-                                <div className="mt-3 flex justify-end">
-                                  <button
-                                    onClick={() => {}}
-                                    className="flex items-center space-x-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
-                                    disabled={saving}
-                                  >
-                                    {saving ? (
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                      <Save className="w-4 h-4" />
-                                    )}
-                                    <span>Sauvegarder</span>
-                                  </button>
-                                </div>
+                                {canEdit && (
+                                  <div className="mt-3 flex justify-end">
+                                    <button
+                                      onClick={() => {}}
+                                      className="flex items-center space-x-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
+                                      disabled={saving}
+                                    >
+                                      {saving ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : (
+                                        <Save className="w-4 h-4" />
+                                      )}
+                                      <span>Sauvegarder</span>
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -1389,17 +1725,19 @@ const HistoryView: React.FC = () => {
                           {dayActivities.length + activeForms.length} activité{dayActivities.length + activeForms.length > 1 ? 's' : ''}
                         </span>
                       </div>
-                      <button 
-                        className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-medium hover:from-green-600 hover:to-emerald-600 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
-                        disabled={saving}
-                      >
-                        {saving ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <CheckCircle className="w-5 h-5" />
-                        )}
-                        <span>Enregistrer</span>
-                      </button>
+                      {canEdit && (
+                        <button 
+                          className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-medium hover:from-green-600 hover:to-emerald-600 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
+                          disabled={saving}
+                        >
+                          {saving ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <CheckCircle className="w-5 h-5" />
+                          )}
+                          <span>Enregistrer</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
