@@ -2,7 +2,6 @@ import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-// Couleurs professionnelles améliorées
 const CHART_COLORS = [
   '#1e40af', '#059669', '#dc2626', '#d97706', '#0891b2',
   '#16a34a', '#7c3aed', '#e11d48', '#0d9488', '#4f46e5',
@@ -27,7 +26,7 @@ interface PDFData {
   }>;
 }
 
-// Configuration des graphiques haute résolution
+// Configuration des graphiques haute resolution
 const CHART_CONFIG = {
   barChart: {
     width: 1200,
@@ -52,7 +51,7 @@ const CHART_CONFIG = {
   }
 };
 
-// Fonction pour générer un graphique en barres haute résolution
+// Fonction to generate  un graphique en barres haute résolution
 const generateBarChartSVG = (
   labels: string[],
   values: number[],
@@ -71,7 +70,7 @@ const generateBarChartSVG = (
   const maxValue = Math.max(...values, 0);
   const yScale = maxValue > 0 ? innerHeight / maxValue : 1;
 
-  // Création des barres avec ombres et bordures
+
   const bars = values
     .map((value, i) => {
       const barHeight = value * yScale;
@@ -117,7 +116,7 @@ const generateBarChartSVG = (
     })
     .join('');
 
-  // Création des labels d'axe X
+  //  des labels d'axe X
   const xLabels = labels
     .map((label, i) => {
       const x = margin.left + (i * innerWidth) / values.length + innerWidth / (2 * values.length);
@@ -138,7 +137,7 @@ const generateBarChartSVG = (
     })
     .join('');
 
-  // Création de l'axe Y avec grille
+  //  l'axe Y avec grille
   const yTicks = [];
   const tickCount = 6;
   for (let i = 0; i <= tickCount; i++) {
@@ -366,7 +365,7 @@ const generatePieChartSVG = (
     })
     .join('');
 
-  // Légende améliorée
+
   const legendWidth = 250;
   const legendStartX = center.x + radius + 40;
   const legendStartY = center.y - (validData.length * 35) / 2;
@@ -464,11 +463,11 @@ const generatePieChartSVG = (
   `;
 };
 
-// Fonction optimisée pour ajouter des SVG au PDF avec qualité maximale
+
 const addSVGToPDF = async (pdf: jsPDF, svg: string, x: number, y: number, width: number, height: number): Promise<void> => {
   return new Promise((resolve, reject) => {
     try {
-      // Créer un canvas haute résolution (x8)
+      //  canvas haute résolution (x8)
       const scaleFactor = 8;
       const canvas = document.createElement('canvas');
       canvas.width = width * scaleFactor;
@@ -477,7 +476,7 @@ const addSVGToPDF = async (pdf: jsPDF, svg: string, x: number, y: number, width:
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('Impossible d\'obtenir le contexte canvas');
 
-      // Optimisation de la qualité
+      // Optimisation de la qualite
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       
@@ -485,14 +484,14 @@ const addSVGToPDF = async (pdf: jsPDF, svg: string, x: number, y: number, width:
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Créer une image SVG
+      // image SVG
       const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
       const url = URL.createObjectURL(svgBlob);
       
       const img = new Image();
       img.onload = () => {
         try {
-          // Dessiner avec qualité maximale
+          // 
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           
           // Convertir en PNG avec qualité maximale
@@ -530,7 +529,7 @@ const addSVGToPDF = async (pdf: jsPDF, svg: string, x: number, y: number, width:
   });
 };
 
-// Générer le graphique des heures quotidiennes
+
 const generateDailyHoursChart = (dailyHours: { [date: string]: number }): string => {
   const labels = Object.keys(dailyHours).map(date => 
     format(new Date(date), 'EEE dd/MM', { locale: fr })
@@ -544,7 +543,7 @@ const generateDailyHoursChart = (dailyHours: { [date: string]: number }): string
   });
 };
 
-// Générer un graphique de répartition
+
 const generateDistributionChart = (
   distribution: Record<string, unknown>,
   title: string
@@ -561,7 +560,6 @@ const generateDistributionChart = (
   });
 };
 
-// Générer le rapport PDF complet avec graphiques haute résolution
 export const generatePDFReport = async (data: PDFData): Promise<void> => {
   try {
     const pdf = new jsPDF({
@@ -575,7 +573,7 @@ export const generatePDFReport = async (data: PDFData): Promise<void> => {
     const pageHeight = pdf.internal.pageSize.getHeight();
     let yPosition = 20;
     
-    // En-tête amélioré
+   
     pdf.setFillColor(30, 64, 175);
     pdf.rect(0, 0, pageWidth, 40, 'F');
     
@@ -591,7 +589,7 @@ export const generatePDFReport = async (data: PDFData): Promise<void> => {
     pdf.setTextColor(0, 0, 0);
     yPosition = 50;
     
-    // Métriques clés avec style amélioré
+
     const metrics = [
       { label: 'Total des heures', value: `${data.totalHours.toFixed(1)}h`, color: '#1e40af' },
       { label: 'Jours travaillés', value: `${data.workingDays}`, color: '#059669' },
@@ -608,21 +606,20 @@ export const generatePDFReport = async (data: PDFData): Promise<void> => {
     metrics.forEach((metric, index) => {
       const x = startX + index * (boxWidth + spacing);
       
-      // Ombre portée
       pdf.setFillColor(100, 100, 100, 20);
       pdf.roundedRect(x + 2, yPosition + 2, boxWidth, boxHeight, 3, 3, 'F');
       
-      // Boîte principale
+     
       pdf.setFillColor(metric.color);
       pdf.roundedRect(x, yPosition, boxWidth, boxHeight, 3, 3, 'F');
       
-      // Valeur
+  
       pdf.setTextColor(255, 255, 255);
       pdf.setFontSize(18);
       pdf.setFont('helvetica', 'bold');
       pdf.text(metric.value, x + boxWidth/2, yPosition + 15, { align: 'center' });
       
-      // Label
+ 
       pdf.setFontSize(9);
       pdf.setFont('helvetica', 'normal');
       pdf.text(metric.label, x + boxWidth/2, yPosition + 22, { align: 'center' });
@@ -630,7 +627,7 @@ export const generatePDFReport = async (data: PDFData): Promise<void> => {
     
     yPosition += 45;
     
-    // Graphique des heures quotidiennes
+    
     if (Object.keys(data.dailyHours).length > 0) {
       const dailyChartSVG = generateDailyHoursChart(data.dailyHours);
       await addSVGToPDF(pdf, dailyChartSVG, 10, yPosition, 190, 130);
@@ -641,7 +638,7 @@ export const generatePDFReport = async (data: PDFData): Promise<void> => {
     pdf.addPage();
     yPosition = 20;
     
-    // En-tête page 2
+  
     pdf.setFillColor(5, 150, 105);
     pdf.rect(0, 0, pageWidth, 40, 'F');
     
@@ -657,7 +654,7 @@ export const generatePDFReport = async (data: PDFData): Promise<void> => {
     pdf.setTextColor(0, 0, 0);
     yPosition = 50;
     
-    // Analyse par catégorie
+    // Analyse par categorie
     pdf.setFillColor(243, 244, 246);
     pdf.rect(10, yPosition - 5, pageWidth - 20, 20, 'F');
     
@@ -666,7 +663,7 @@ export const generatePDFReport = async (data: PDFData): Promise<void> => {
     pdf.text(' RÉPARTITION PAR CATÉGORIE', 15, yPosition + 8);
     yPosition += 30;
 
-    // Calcul précis des catégories à partir des activités
+    
     const realCategoryDistribution: Record<string, number> = {};
     data.activities.forEach(activity => {
       const hours = typeof activity.hours === 'number' ? activity.hours : Number(activity.hours) || 0;
@@ -682,7 +679,7 @@ export const generatePDFReport = async (data: PDFData): Promise<void> => {
       yPosition += 130;
     }
     
-    // Détail des catégories
+    
     pdf.setFillColor(249, 250, 251);
     pdf.rect(10, yPosition, pageWidth - 20, 30, 'F');
     
@@ -781,7 +778,7 @@ export const generatePDFReport = async (data: PDFData): Promise<void> => {
       pdf.setFillColor(100, 100, 100, 20);
       pdf.roundedRect(x + 2, yPosition + 2, perfBoxWidth, perfBoxHeight, 4, 4, 'F');
       
-      // Boîte
+      // Boitw
       pdf.setFillColor(metric.color);
       pdf.roundedRect(x, yPosition, perfBoxWidth, perfBoxHeight, 4, 4, 'F');
       
@@ -802,11 +799,11 @@ export const generatePDFReport = async (data: PDFData): Promise<void> => {
     
     yPosition += 50;
     
-    // Détail des activités
+   
     pdf.addPage();
     yPosition = 20;
     
-    // En-tête du tableau
+    
     pdf.setFillColor(30, 64, 175);
     pdf.rect(10, yPosition - 5, pageWidth - 20, 20, 'F');
     
@@ -818,7 +815,7 @@ export const generatePDFReport = async (data: PDFData): Promise<void> => {
     yPosition += 25;
     pdf.setTextColor(0, 0, 0);
     
-    // En-têtes des colonnes
+   
     pdf.setFillColor(243, 244, 246);
     pdf.rect(10, yPosition - 3, pageWidth - 20, 15, 'F');
     
@@ -834,7 +831,7 @@ export const generatePDFReport = async (data: PDFData): Promise<void> => {
     
     yPosition += 15;
     
-    // Données du tableau
+   
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(10);
     

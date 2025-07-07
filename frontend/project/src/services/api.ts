@@ -716,7 +716,7 @@ export const changePasswordApi = async (oldPassword: string, newPassword: string
     console.log("12. Données de réponse:", data)
 
     if (!response.ok) {
-      // Gestion des erreurs de validation
+      
       if (typeof data === "object" && data !== null) {
         const errorMessages: string[] = []
         Object.entries(data).forEach(([field, messages]) => {
@@ -759,7 +759,7 @@ export const updateUserProfileApi = async (profileData: {
     const data = await response.json()
 
     if (!response.ok) {
-      // Gestion des erreurs de validation
+     
       if (typeof data === "object" && data !== null) {
         const errorMessages: string[] = []
         Object.entries(data).forEach(([field, messages]) => {
@@ -837,7 +837,7 @@ export const fetchManagerTeamsApi = async (): Promise<any[]> => {
       headers: getAuthHeaders(),
     })
 
-    // Si l'endpoint n'existe pas, utiliser l'endpoint général des équipes
+   
     if (response.status === 404) {
       response = await fetch(`${API_BASE_URL}/gestion-utilisateurs/equipes/`, {
         headers: getAuthHeaders(),
@@ -910,7 +910,7 @@ export const fetchCalendarDataApi = async (year: number, month: number): Promise
   }
 }
 
-// Fonction de debug pour les jours fériés
+// Fonction de debug 
 export const debugHolidaysApi = async (): Promise<any> => {
   try {
     console.log(" Debug des jours fériés...")
@@ -1054,7 +1054,7 @@ export const getTeamReport = async (params: ReportParams): Promise<ReportData> =
       }
     );
 
-    // Gestion des différents formats
+    // Gestion des differents formats
     switch (params.format) {
       case 'csv':
         return {
@@ -1117,18 +1117,18 @@ export const fetchProjects = async (): Promise<Projet[]> => {
       }
     });
     console.log(response.data)
-    // Validation du schéma de réponse (optionnel mais recommandé)
+   
     if (!Array.isArray(response.data)) {
       throw new Error('Format de réponse inattendu');
     }
 
-    // Transformation des données si nécessaire
+ 
     const projets: Projet[] = response.data.map((projet: any) => ({
       ...projet,
-      // Formatage des dates si nécessaire
+    
       date_debut: projet.date_debut || '',
       date_fin: projet.date_fin || '',
-      // Assure la cohérence des types
+      // Assure la coherence des types
       taux_horaire: Number(projet.taux_horaire) || 0,
       equipe: projet.equipe ? {
         id: projet.equipe.id,
@@ -1146,7 +1146,7 @@ export const fetchProjects = async (): Promise<Projet[]> => {
   } catch (error) {
     console.error('Erreur lors de la récupération des projets:', error);
     
-    // Gestion des erreurs spécifiques
+    // Gestion des erreurs 
     const err = error as any;
     if (err.response) {
       switch (err.response.status) {
@@ -1228,24 +1228,20 @@ export const submitWeeklyImputations = async (
   );
 };
 
-//export const fetchCurrentWeekEntries = async (): Promise<ReportData[]> => {
-  //const response = await api.get('/gestion-imputations-projet/semaine_courante/');
- // return response.data.imputations;};
+
 export interface WeekImputation {
   date: string;
   projetId: number;
   heures: number;
   categorie: string;
 }
-//export const saveWeekImputations = async (imputations: WeekImputation[]): Promise<void> => {
-  //await api.post('/gestion-imputations-projet/semaine_imputation/', { imputations });
-//};
+
 export const fetchWeeklyImputationsApi = async (): Promise<WeeklyImputation> => {
   const response = await api.get("/gestion-imputations-projet/employe/imputations/semaine_courante/", {
     headers: getAuthHeaders(),
   });
   
-  // Transformer les données pour correspondre à l'interface WeeklyImputation
+
   return {
     imputations: response.data.imputations.map((imp: any) => ({
       id: imp.id.toString(),
@@ -1263,14 +1259,14 @@ export const fetchWeeklyImputationsApi = async (): Promise<WeeklyImputation> => 
 };
 
 /**
- * Récupère la liste des projets disponibles pour l'employé
+ *  la liste des projets disponibles pour l'employe
  */
 export const fetchEmployeeProjectsApi = async (): Promise<Projet[]> => {
   const response = await api.get("/gestion-imputations-projet/employe/imputations/projets_employe/", {
     headers: getAuthHeaders(),
   });
   
-  // Transformer les données pour correspondre à l'interface Projet
+  // Transformer ldata pour correspondre à l'interface Projet
   return response.data.map((projet: any) => ({
     id: projet.id,
     identifiant: projet.code || "",
@@ -1280,15 +1276,13 @@ export const fetchEmployeeProjectsApi = async (): Promise<Projet[]> => {
     date_fin: projet.date_fin || "",
     taux_horaire: parseFloat(projet.taux_horaire) || 0,
     categorie: projet.categorie || "interne",
-    equipe: projet.equipe, // Supposons que cette donnée est déjà au bon format
-    actif: projet.actif !== false, // Par défaut true si non spécifié
-    created_by: projet.created_by, // Supposons que cette donnée est déjà au bon format
+    equipe: projet.equipe, 
+    actif: projet.actif !== false, 
+    created_by: projet.created_by, 
   }));
 };
 
-/**
- * Soumet les imputations de la semaine courante
- */
+
 export const submitWeeklyImputationsApi = async (): Promise<{ status: 'soumis' | 'valide' | 'rejete' }> => {
   const response = await api.post(
     "/gestion-imputations-projet/employe/imputations/soumettre_semaine/", 
@@ -1397,21 +1391,21 @@ export const updateImputation = async (
   data: Partial<ImputationHoraire>
 ): Promise<ImputationHoraire> => {
   try {
-    // On clone pour ne jamais modifier data original
+    
     const sendData: any = { ...data };
 
-    // 1. Convertir projet objet → projet_id
+  
     if (sendData.projet && typeof sendData.projet === "object") {
       sendData.projet_id = sendData.projet.id;
       delete sendData.projet;
     }
-    // 2. Convertir formation objet → formation_id
+  
     if (sendData.formation && typeof sendData.formation === "object") {
       sendData.formation_id = sendData.formation.id;
       delete sendData.formation;
     }
 
-    // 3. BONUS : Ne pas envoyer l’ID non concerné selon la catégorie choisie
+   
     if (sendData.categorie === "projet") {
       delete sendData.formation_id; // Pas de formation_id si projet
     }
@@ -1477,18 +1471,18 @@ export const createFormation = async (formData: FormData): Promise<Formation> =>
             '/gestion-imputations-projet/trainings/', 
             formData, 
             {
-                // Axios gère automatiquement Content-Type avec FormData
+                
                 withCredentials: true,
                 headers: {
                     ...getAuthHeaders(),
-                    // Ne pas mettre Content-Type ici si c’est FormData !
+                    
                 },
             }
         );
         return response.data;
     } catch (error: any) {
         console.error('Erreur création formation:', error.response?.data);
-        // Affiche le détail côté API s’il existe, sinon message générique
+       
         throw new Error(
             error.response?.data?.detail ||
             error.response?.data?.intitule?.[0] ||
