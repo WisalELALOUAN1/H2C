@@ -1,5 +1,5 @@
 import axios from "axios"
-import type { GlobalRules, User, EquipeFormData,Formation, Equipe ,ImputationHoraire,ProjetFormData,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,ManagerDashboardData,Projet,TimeEntryData} from "../types"
+import type { GlobalRules, User, EquipeFormData,Formation, Equipe ,WeekStatus,ImputationHoraire,ProjetFormData,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,ManagerDashboardData,Projet,TimeEntryData} from "../types"
 
 const API_BASE_URL = "http://localhost:8000" 
 const api = axios.create({
@@ -1496,4 +1496,56 @@ export const createFormation = async (formData: FormData): Promise<Formation> =>
             'Erreur lors de la création de la formation'
         );
     }
+};
+export const fetchWeeklyStatus = async (): Promise<WeekStatus> => {
+  try {
+    const res = await api.get(
+      '/gestion-imputations-projet/employe/imputations/semaine_courante/',
+      { headers: getAuthHeaders() }
+    );
+
+    const data = res.data;
+    const statusMap: Record<string, WeekStatus['status']> = {
+      brouillon: 'draft',
+      soumis   : 'submitted',
+      valide   : 'validated',
+      rejete   : 'rejected',
+    };
+
+    return {
+      status        : statusMap[data.semaine_status] ?? 'draft',
+      submittedAt   : data.date_soumission,
+      validatedAt   : data.date_validation,
+      validatedBy   : data.valide_par
+                      ? `${data.valide_par.prenom} ${data.valide_par.nom}`
+                      : undefined,
+      rejectedAt    : data.date_rejet,
+      rejectionReason: data.commentaire,
+    };
+  } catch (e) {
+    console.error('Error fetching weekly status:', e);
+    return { status: 'draft' };           // valeur de repli
+  }
+};
+
+export const submitWeeklyTimesheet = async (): Promise<WeekStatus> => {
+  try {
+    await api.post(
+      '/gestion-imputations-projet/employe/imputations/soumettre_semaine/',
+      {},
+      { headers: getAuthHeaders() }
+    );
+
+    return {
+      status     : 'submitted',
+      submittedAt: new Date().toISOString(),
+    };
+  } catch (e: any) {
+    console.error('Error submitting weekly timesheet:', e);
+    throw new Error(
+      e.response?.data?.error
+      ?? e.response?.data?.detail
+      ?? 'Erreur lors de la soumission de la semaine'
+    );
+  }
 };

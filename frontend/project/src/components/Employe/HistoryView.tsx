@@ -38,13 +38,16 @@ import {
   deleteImputation,
   fetchEmployeeProjectsApi,
   fetchEmployeeTrainings,
-  createFormation
+  createFormation,
+  fetchWeeklyStatus,
+  submitWeeklyTimesheet
 } from "../../services/api";
 import type {
   GlobalRules,
   ImputationHoraire,
   Projet,
-  Formation
+  Formation,
+  WeekStatus
 } from "../../types";
 import { useAuth } from "../../contexts/AuthContext";
 import { generatePDFReport } from "../../utils/pdfExport"
@@ -57,15 +60,6 @@ interface ActivityType {
   bgColor: string;
   borderColor: string;
   textColor: string;
-}
-
-interface WeekStatus {
-  status: 'draft' | 'submitted' | 'validated' | 'rejected';
-  submittedAt?: string;
-  validatedAt?: string;
-  validatedBy?: string;
-  rejectedAt?: string;
-  rejectionReason?: string;
 }
 
 const activityTypes: ActivityType[] = [
@@ -746,7 +740,7 @@ const HistoryView: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [exporting, setExporting] = useState(false);
   
-  // Mock week status - in real app, this would come from API
+  // Weekly status state
   const [weekStatus, setWeekStatus] = useState<WeekStatus>({
     status: 'draft'
   });
@@ -782,6 +776,10 @@ const HistoryView: React.FC = () => {
           end: endOfWeek,
         });
         setCurrentWeek(weekDays);
+
+        // Load weekly status
+        const status = await fetchWeeklyStatus();
+        setWeekStatus(status);
 
         const imputationsData: { [date: string]: ImputationHoraire[] } = {};
         
@@ -866,7 +864,7 @@ const HistoryView: React.FC = () => {
   };
 
   const handleAddClick = (date: Date) => {
-    if (weekStatus.status !== 'draft') return;
+    if (!canEdit) return;
     
     const dateKey = format(date, "yyyy-MM-dd");
     const newFormId = `form-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -878,7 +876,7 @@ const HistoryView: React.FC = () => {
   };
 
   const handleDuplicateActivity = (date: Date, activity: ImputationHoraire) => {
-    if (weekStatus.status !== 'draft') return;
+    if (!canEdit) return;
     
     const dateKey = format(date, "yyyy-MM-dd");
     const newFormId = `form-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -943,7 +941,7 @@ const HistoryView: React.FC = () => {
     field: keyof ImputationHoraire,
     value: any
   ) => {
-    if (weekStatus.status !== 'draft') return;
+    if (!canEdit) return;
     
     const dateKey = format(date, "yyyy-MM-dd");
     try {
@@ -967,7 +965,7 @@ const HistoryView: React.FC = () => {
   };
 
   const handleDeleteActivity = async (date: Date, id: number) => {
-    if (weekStatus.status !== 'draft') return;
+    if (!canEdit) return;
     
     const dateKey = format(date, "yyyy-MM-dd");
     try {
@@ -1031,18 +1029,14 @@ const HistoryView: React.FC = () => {
   const handleSubmitWeek = async () => {
     setSubmitting(true);
     try {
-      // In real app, this would call an API to submit the week
-      // await submitWeeklyTimesheet(weekData);
+      const updatedStatus = await submitWeeklyTimesheet();
+      setWeekStatus(updatedStatus);
       
-      setWeekStatus({
-        status: 'submitted',
-        submittedAt: new Date().toISOString()
-      });
-      
+      // Show success message
       console.log('Semaine soumise avec succès');
     } catch (err) {
       console.error('Erreur lors de la soumission:', err);
-      setError('Erreur lors de la soumission de la semaine');
+      setError(err instanceof Error ? err.message : 'Erreur lors de la soumission de la semaine');
     } finally {
       setSubmitting(false);
     }
@@ -1246,7 +1240,8 @@ const HistoryView: React.FC = () => {
     }
   };
 
-  const canEdit = weekStatus.status === 'draft';
+  // Permission logic
+  const canEdit = weekStatus.status === 'draft' || weekStatus.status === 'submitted';
   const canSubmit = weekStatus.status === 'draft' && calculateWeekTotal() > 0;
 
   if (loading) {

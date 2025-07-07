@@ -407,3 +407,12 @@ export interface Formation {
   employe?: User;
   justificatif?: string; //
 }
+// Week status
+export interface WeekStatus {
+  status: 'draft' | 'submitted' | 'validated' | 'rejected';
+  submittedAt?: string;
+  validatedAt?: string;
+  validatedBy?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+}

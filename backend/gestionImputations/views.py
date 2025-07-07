@@ -9,7 +9,8 @@ from rest_framework import status
 from rest_framework.views import APIView
 from django.core.exceptions import PermissionDenied
 from rest_framework.exceptions import ValidationError
-from datetime import date, timedelta, timezone
+from datetime import date, timedelta
+from django.utils import timezone  
 from datetime import datetime
 from gestionUtilisateurs.serializers import EquipeSerializer
 from dateutil import parser
