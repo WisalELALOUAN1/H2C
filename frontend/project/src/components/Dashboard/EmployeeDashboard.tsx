@@ -183,7 +183,7 @@ console.log('[RESULTAT] totalHours:', totalHours, 'type:', typeof totalHours);
       ? 'Absence'
       : imputation.categorie === 'admin'
       ? 'Tâches administratives'
-      : imputation.projet?.nom || 'Autre activité';
+      : "	Contribution au projet "+imputation.projet?.nom || 'Autre activité';
 
     // Styles conditionnels
     const categoryStyle = {
