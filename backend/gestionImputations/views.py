@@ -532,32 +532,32 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
         by_project, by_category, by_employee = {}, {}, {}
 
         for imp in qs:
-            heures = float(imp.heures)
+            h = float(imp.heures)
 
-            #employe
-            emp = f"{imp.employe.prenom} {imp.employe.nom}"
-            by_employee[emp] = by_employee.get(emp, 0) + heures
+            emp_name = f"{imp.employe.prenom} {imp.employe.nom}"
+            by_employee[emp_name] = by_employee.get(emp_name, 0) + h
 
-            # projet ou catégorie
             if imp.categorie == "projet" and imp.projet:
-                p_name = imp.projet.nom
-                if p_name not in by_project:
-                    by_project[p_name] = {
+                p = imp.projet.nom
+                if p not in by_project:
+                    by_project[p] = {
                         "heures": 0,
-                        "taux"  : float(imp.projet.taux_horaire),
+                        "taux": float(imp.projet.taux_horaire),
                         "valeur": 0
                     }
-                by_project[p_name]["heures"] += heures
-                by_project[p_name]["valeur"] += heures * float(imp.projet.taux_horaire)
+                by_project[p]["heures"] += h
+                by_project[p]["valeur"] += h * float(imp.projet.taux_horaire)
+                by_category["projet"] = by_category.get("projet", 0) + h
             else:
                 cat = imp.categorie
-                by_category[cat] = by_category.get(cat, 0) + heures
+                by_category[cat] = by_category.get(cat, 0) + h
 
         return {
-            "by_project" : by_project,
+            "by_project": by_project,
             "by_category": by_category,
             "by_employee": by_employee,
         }
+
 
     # indicateur  de retard
     def _late_projects(self, teams):

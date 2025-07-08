@@ -296,7 +296,7 @@ const MonthlySummaryTab: React.FC<{
                     <tr>
                       <th className="px-6 py-4 text-left">Activité</th>
                       <th className="px-6 py-4 text-left">Heures</th>
-                      <th className="px-6 py-4 text-left">Valeur</th>
+                      
                     </tr>
                   </thead>
                   <tbody>
@@ -313,9 +313,7 @@ const MonthlySummaryTab: React.FC<{
                         <td className="px-6 py-4 font-bold">
                           {Number(data.heures).toFixed(2)}h
                         </td>
-                        <td className="px-6 py-4 font-bold text-red-600">
-                          €{(data.heures * (data.taux_horaire || 0)).toFixed(2)}
-                        </td>
+                        
                       </tr>
                     ))}
                   </tbody>
