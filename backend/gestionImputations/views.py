@@ -567,7 +567,29 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
             actif=True
         ).count()
 
-    
+    @action(detail=False, methods=["get"], url_path="projets")
+    def projets(self, request):
+        """
+        GET /gestion-imputations-projet/manager/projets/
+
+        ↳ Renvoie la liste minimale des projets (id, nom)
+          rattachés aux équipes gérées par le manager connecté.
+        """
+        teams = self._managed_teams(request.user)
+
+        # Aucun projet si le user n’est pas manager ou ne gère aucune équipe
+        if not teams.exists():
+            return Response([], status=200)
+
+        projets = (
+            Projet.objects
+            .filter(equipe__in=teams)
+            .values("id", "nom")      # ⚑ juste les champs utiles
+            .distinct()
+            .order_by("nom")
+        )
+
+        return Response(list(projets), status=200)
     @action(detail=True, methods=["post"], url_path="valider-semaine")
     def validate_week(self, request, pk=None):
         week = get_object_or_404(SemaineImputation, pk=pk)

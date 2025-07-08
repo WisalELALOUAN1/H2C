@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { 
+import {
   getManagerDashboard,
   validateWeek,
-  getTeamReport,
-  ManagerDashboardData
+  getManagerProjects,
 } from '../../services/api';
+import { ManagerDashboardData, LightProject } from '../../types';
+import {
+  generateDetailedEmployeeReport,
+  generateGlobalSummaryReport
+} from '../../utils/reportGeneratorForManager';
 import {
   Clock,
   Users,
@@ -14,23 +18,144 @@ import {
   TrendingUp,
   FileText,
   Calendar,
-  Activity
+  Activity,
+  Download
 } from 'lucide-react';
+
+// Frontend report generation utilities
+const generateJSONReport = (data: any, filename: string) => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+const generateCSVReport = (data: any, filename: string) => {
+ 
+  let csv = 'Type, Intitulé du projet ,Employe,Heures\n'; 
+
+
+  Object.entries(data.charge_par_projet || {}).forEach(
+    ([projet, { heures }]: [string, any]) => {
+      Object.keys(data.charge_par_employe || {}).forEach(emp => {
+        csv += `Projet,"${projet}","${emp}",${heures}\n`;
+      });
+    }
+  );
+
+
+  Object.entries(data.charge_par_categorie || {})
+    .filter(([, c]: [string, any]) => c.label !== 'Projets')
+    .forEach(([, cat]: [string, any]) => {
+      Object.keys(data.charge_par_employe || {}).forEach(emp => {
+        csv += `"${cat.label}",-,"${emp}",${cat.heures}\n`;
+      });
+    });
+
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'), { href: url, download: filename }).click();
+  URL.revokeObjectURL(url);
+};
+
+
+const generatePDFReport = async (data: any, filename: string) => {
+  const { jsPDF } = await import('jspdf');
+  const { format } = await import('date-fns');
+  const { fr } = await import('date-fns/locale');
+  
+  const pdf = new jsPDF({
+    orientation: 'p',
+    unit: 'mm',
+    format: 'a4'
+  });
+  
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  let yPosition = 20;
+  
+  // Header
+  pdf.setFillColor(30, 64, 175);
+  pdf.rect(0, 0, pageWidth, 40, 'F');
+  
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(24);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('RAPPORT D\'ACTIVITÉ', pageWidth / 2, 25, { align: 'center' });
+  
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(`Généré le ${format(new Date(), 'dd/MM/yyyy à HH:mm', { locale: fr })}`, pageWidth / 2, 35, { align: 'center' });
+  
+  pdf.setTextColor(0, 0, 0);
+  yPosition = 50;
+  
+  // Projects section
+  pdf.setFontSize(16);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('RÉPARTITION PAR PROJET', 15, yPosition);
+  yPosition += 10;
+  
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'normal');
+  
+  Object.entries(data.charge_par_projet || {}).forEach(([projet, info]: [string, any]) => {
+    pdf.text(`• ${projet}: ${info.heures.toFixed(1)}h (€${info.valeur.toFixed(2)})`, 15, yPosition);
+    yPosition += 8;
+  });
+  
+  yPosition += 10;
+  
+  // Employees section
+  pdf.setFontSize(16);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('RÉPARTITION PAR EMPLOYÉ', 15, yPosition);
+  yPosition += 10;
+  
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'normal');
+  
+  Object.entries(data.charge_par_employe || {}).forEach(([employe, heures]: [string, any]) => {
+    pdf.text(`• ${employe}: ${heures.toFixed(1)}h`, 15, yPosition);
+    yPosition += 8;
+  });
+  
+  yPosition += 10;
+  
+  // Categories section
+  pdf.setFontSize(16);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('RÉPARTITION PAR CATÉGORIE', 15, yPosition);
+  yPosition += 10;
+  
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'normal');
+  
+  Object.entries(data.charge_par_categorie || {}).forEach(([key, cat]: [string, any]) => {
+    pdf.text(`• ${cat.label}: ${cat.heures.toFixed(1)}h`, 15, yPosition);
+    yPosition += 8;
+  });
+  
+  pdf.save(filename);
+};
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean; error?: Error }
 > {
   state = { hasError: false };
-
+  
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
   }
-
+  
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Error caught:', error, errorInfo);
   }
-
+  
   render() {
     if (this.state.hasError) {
       return (
@@ -59,12 +184,12 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     valide: { color: 'bg-green-100 text-green-800 border-green-200', label: 'Validé' },
     rejete: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Rejeté' }
   };
-
-  const config = statusConfig[status as keyof typeof statusConfig] || { 
-    color: 'bg-gray-100 text-gray-800 border-gray-200', 
-    label: status 
+  
+  const config = statusConfig[status as keyof typeof statusConfig] || {
+    color: 'bg-gray-100 text-gray-800 border-gray-200',
+    label: status
   };
-
+  
   return (
     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${config.color}`}>
       {config.label}
@@ -102,7 +227,7 @@ const TabNavigation: React.FC<{
     { label: 'Validation', icon: <CheckCircle className="w-5 h-5" /> },
     { label: 'Reporting', icon: <FileText className="w-5 h-5" /> }
   ];
-
+  
   return (
     <div className="bg-gradient-to-r from-amber-800 to-amber-700 p-1 rounded-xl mb-8">
       <div className="flex space-x-1">
@@ -131,7 +256,7 @@ const DashboardTab: React.FC<{
 }> = ({ dashboardData, loading }) => {
   if (loading) return <LoadingSpinner />;
   if (!dashboardData) return <div className="text-center py-12 text-gray-500">Aucune donnée</div>;
-
+  
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -162,7 +287,7 @@ const DashboardTab: React.FC<{
             </table>
           </div>
         </div>
-
+        
         <div className="space-y-6">
           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Indicateurs</h3>
@@ -201,7 +326,7 @@ const DashboardTab: React.FC<{
           </div>
         </div>
       </div>
-
+      
       {/* Charge par catégorie */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">
@@ -240,7 +365,7 @@ const DashboardTab: React.FC<{
           </table>
         </div>
       </div>
-
+      
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Charge par employé</h3>
         <div className="overflow-x-auto">
@@ -278,17 +403,17 @@ const ValidationTab: React.FC<{
   const [comment, setComment] = useState('');
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [selectedAction, setSelectedAction] = useState<'valider' | 'rejeter'>('valider');
-
+  
   // Remove duplicates based on week ID
   const uniqueWeeks = useMemo(
     () => Array.from(
-            new Map((weeksToValidate ?? [])
-                     .map(w => [w.id, w])).values()),
+      new Map((weeksToValidate ?? [])
+        .map(w => [w.id, w])).values()),
     [weeksToValidate]
   );
-
+  
   if (loading) return <LoadingSpinner />;
-
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-3">
@@ -359,7 +484,7 @@ const ValidationTab: React.FC<{
           </div>
         </div>
       )}
-
+      
       {selectedWeek && (
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">
@@ -402,26 +527,60 @@ const ValidationTab: React.FC<{
 const ReportingTab: React.FC<{
   onGenerateReport: (params: any) => void;
   loading: boolean;
-}> = ({ onGenerateReport, loading }) => {
+  projects: LightProject[];
+  dashboardData: ManagerDashboardData | null;
+}> = ({ onGenerateReport, loading, projects, dashboardData }) => {
   const [params, setParams] = useState({
     dateDebut: '',
     dateFin: '',
     projetId: '',
     format: 'json'
   });
-
+  
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onGenerateReport(params);
   };
-
+  
+  // Calculate some stats for the info box
+  const totalHours = useMemo(() => {
+    if (!dashboardData) return 0;
+    return Object.values(dashboardData.charge_par_employe || {}).reduce((sum, hours) => sum + hours, 0);
+  }, [dashboardData]);
+  
+  const totalProjects = useMemo(() => {
+    if (!dashboardData) return 0;
+    return Object.keys(dashboardData.charge_par_projet || {}).length;
+  }, [dashboardData]);
+  
+  const totalEmployees = useMemo(() => {
+    if (!dashboardData) return 0;
+    return Object.keys(dashboardData.charge_par_employe || {}).length;
+  }, [dashboardData]);
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-3">
         <FileText className="w-8 h-8 text-amber-600" />
         <h2 className="text-2xl font-bold text-gray-800">Génération de rapports</h2>
       </div>
-
+      
+      {/* Statistics overview */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+          <div className="text-sm text-blue-700 mb-1">Total heures</div>
+          <div className="text-2xl font-bold text-blue-800">{totalHours.toFixed(1)}h</div>
+        </div>
+        <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
+          <div className="text-sm text-green-700 mb-1">Projets actifs</div>
+          <div className="text-2xl font-bold text-green-800">{totalProjects}</div>
+        </div>
+        <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+          <div className="text-sm text-purple-700 mb-1">Employés</div>
+          <div className="text-2xl font-bold text-purple-800">{totalEmployees}</div>
+        </div>
+      </div>
+      
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -448,20 +607,23 @@ const ReportingTab: React.FC<{
               />
             </div>
           </div>
-
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Projet (optionnel)
+              Projet
             </label>
-            <input
-              type="text"
+            <select
               value={params.projetId}
               onChange={(e) => setParams({...params, projetId: e.target.value})}
-              placeholder="ID du projet"
               className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-            />
+            >
+              <option value="">Tous les projets</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.nom}</option>
+              ))}
+            </select>
           </div>
-
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Format
@@ -474,16 +636,33 @@ const ReportingTab: React.FC<{
               <option value="json">JSON</option>
               <option value="csv">CSV</option>
               <option value="pdf">PDF</option>
+              <option value="detailed">Rapport détaillé par employé</option>
+              <option value="summary">Rapport de synthèse global</option>
             </select>
           </div>
-
+          
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <h4 className="font-semibold text-amber-800 mb-2 flex items-center">
+              <Download className="w-4 h-4 mr-2" />
+              Types de rapports disponibles :
+            </h4>
+            <ul className="text-sm text-amber-700 space-y-1">
+              <li><strong>JSON :</strong> Données structurées pour analyse programmatique</li>
+              <li><strong>CSV :</strong> Tableau de données pour Excel/Sheets</li>
+              <li><strong>PDF :</strong> Rapport simple imprimable</li>
+              <li><strong>Rapport détaillé :</strong> Analyse complète avec graphiques par employé</li>
+              <li><strong>Rapport de synthèse :</strong> Vue d'ensemble globale avec indicateurs</li>
+            </ul>
+          </div>
+          
           <div className="flex justify-end">
             <button
               type="submit"
               disabled={loading}
-              className="bg-amber-600 text-white px-6 py-2 rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
+              className="bg-amber-600 text-white px-6 py-2 rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
             >
-              {loading ? 'Génération...' : 'Générer le rapport'}
+              {loading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>}
+              <span>{loading ? 'Génération...' : 'Générer le rapport'}</span>
             </button>
           </div>
         </form>
@@ -496,19 +675,21 @@ const ManagerDashboard: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [dashboardData, setDashboardData] = useState<ManagerDashboardData | null>(null);
+  const [projects, setProjects] = useState<LightProject[]>([]);
   const [loading, setLoading] = useState({
     dashboard: false,
     validation: false,
     reporting: false
   });
   const [error, setError] = useState<string | null>(null);
-
+  
   useEffect(() => {
     if (user && user.role === 'manager') {
       loadDashboardData();
+      loadProjects();
     }
   }, [user]);
-
+  
   const loadDashboardData = async () => {
     setLoading(prev => ({...prev, dashboard: true}));
     try {
@@ -522,7 +703,16 @@ const ManagerDashboard: React.FC = () => {
       setLoading(prev => ({...prev, dashboard: false}));
     }
   };
-
+  
+  const loadProjects = async () => {
+    try {
+      const projectsData = await getManagerProjects();
+      setProjects(projectsData);
+    } catch (err) {
+      console.error('Erreur lors du chargement des projets:', err);
+    }
+  };
+  
   const handleValidateWeek = async (id: number, action: 'valider' | 'rejeter', comment = '') => {
     setLoading(prev => ({...prev, validation: true}));
     try {
@@ -536,24 +726,78 @@ const ManagerDashboard: React.FC = () => {
       setLoading(prev => ({...prev, validation: false}));
     }
   };
-
+  
   const handleGenerateReport = async (params: any) => {
+    if (!dashboardData) {
+      setError('Aucune donnée disponible pour générer le rapport');
+      return;
+    }
+    
     setLoading(prev => ({...prev, reporting: true}));
     try {
-      const report = await getTeamReport(params);
-      // Handle report download based on format
-      if (params.format === 'json') {
-        const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `rapport_equipe_${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } else if (report.downloadUrl) {
-        window.open(report.downloadUrl, '_blank');
+      const timestamp = new Date().toISOString().split('T')[0];
+      const projectName = params.projetId ? 
+        projects.find(p => p.id.toString() === params.projetId)?.nom || 'Projet' : 
+        'Tous_Projets';
+      
+      // Filter data based on project selection if needed
+      let filteredData = dashboardData;
+      if (params.projetId) {
+        // Filter the data to only include the selected project
+        const selectedProject = projects.find(p => p.id.toString() === params.projetId);
+        if (selectedProject) {
+          filteredData = {
+            ...dashboardData,
+            charge_par_projet: Object.fromEntries(
+              Object.entries(dashboardData.charge_par_projet || {})
+                .filter(([projet]) => projet === selectedProject.nom)
+            )
+          };
+        }
       }
-     
+      
+      switch (params.format) {
+        case 'json':
+          generateJSONReport(
+            filteredData,
+            `rapport_${projectName}_${timestamp}.json`
+          );
+          break;
+          
+        case 'csv':
+          generateCSVReport(
+            filteredData,
+            `rapport_${projectName}_${timestamp}.csv`
+          );
+          break;
+          
+        case 'pdf':
+          await generatePDFReport(
+            filteredData,
+            `rapport_${projectName}_${timestamp}.pdf`
+          );
+          break;
+          
+        case 'detailed':
+          await generateDetailedEmployeeReport({
+            dashboardData: filteredData,
+            projects,
+            params
+          });
+          break;
+          
+        case 'summary':
+          await generateGlobalSummaryReport({
+            dashboardData: filteredData,
+            projects,
+            params
+          });
+          break;
+          
+        default:
+          throw new Error('Format de rapport non supporté');
+      }
+      
       setError(null);
     } catch (err) {
       console.error('Erreur:', err);
@@ -562,7 +806,7 @@ const ManagerDashboard: React.FC = () => {
       setLoading(prev => ({...prev, reporting: false}));
     }
   };
-
+  
   // Calculate non-productive hours for stat card
   const nonProductiveHours = useMemo(() => {
     if (!dashboardData?.charge_par_categorie) return '0';
@@ -571,7 +815,7 @@ const ManagerDashboard: React.FC = () => {
       .reduce((t, c) => t + c.heures, 0)
       .toFixed(1);
   }, [dashboardData]);
-
+  
   if (!user || user.role !== 'manager') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-amber-50 flex items-center justify-center">
@@ -583,7 +827,7 @@ const ManagerDashboard: React.FC = () => {
       </div>
     );
   }
-
+  
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-amber-50">
@@ -596,7 +840,7 @@ const ManagerDashboard: React.FC = () => {
               {user.prenom} {user.nom}
             </p>
           </div>
-
+          
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 flex justify-between">
               <div className="flex items-center space-x-2">
@@ -608,7 +852,7 @@ const ManagerDashboard: React.FC = () => {
               </button>
             </div>
           )}
-
+          
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
             <StatCard
               icon={<Users className="w-8 h-8" />}
@@ -641,9 +885,9 @@ const ManagerDashboard: React.FC = () => {
               gradient="bg-gradient-to-br from-yellow-600 to-yellow-700"
             />
           </div>
-
+          
           <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-
+          
           <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
             {activeTab === 0 && (
               <DashboardTab 
@@ -662,6 +906,8 @@ const ManagerDashboard: React.FC = () => {
               <ReportingTab
                 onGenerateReport={handleGenerateReport}
                 loading={loading.reporting}
+                projects={projects}
+                dashboardData={dashboardData}
               />
             )}
           </div>

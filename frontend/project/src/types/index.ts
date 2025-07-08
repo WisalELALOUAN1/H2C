@@ -259,17 +259,7 @@ interface ProjectWorkload {
 interface EmployeeWorkload {
   [key: string]: number;
 }
-export interface ManagerDashboardData {
-  semaines_a_valider: WeekToValidate[];
-  charge_par_projet: ProjectWorkload;
-  charge_par_employe: EmployeeWorkload;
-  projets_en_retard: number;
-  periode: string;
-  equipes: Array<{
-    id: number;
-    nom: string;
-  }>;
-}
+
 
 export interface Projet {
     id: number;
@@ -415,4 +405,20 @@ export interface WeekStatus {
   validatedBy?: string;
   rejectedAt?: string;
   rejectionReason?: string;
+}
+export interface LightProject {
+  id: number;
+  nom: string;
+}
+export interface ManagerDashboardData {
+  semaines_a_valider: any[];
+  charge_par_projet: Record<string, { heures: number; taux: number; valeur: number }>;
+  charge_par_categorie: Record<
+    'projet' | 'formation' | 'absence' | 'reunion' | 'admin' | 'autre',
+    { heures: number; label: string }
+  >;
+  charge_par_employe: Record<string, number>;
+  projets_en_retard: number;
+  periode: string;
+  equipes: { id: number; nom: string }[];
 }

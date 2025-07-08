@@ -1,5 +1,5 @@
 import axios from "axios"
-import type { GlobalRules, User, EquipeFormData,Formation, Equipe ,WeekStatus,ImputationHoraire,ProjetFormData,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,Projet,TimeEntryData} from "../types"
+import type { GlobalRules, User, EquipeFormData,Formation, Equipe ,ManagerDashboardData,LightProject,WeekStatus,ImputationHoraire,ProjetFormData,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,Projet,TimeEntryData} from "../types"
 
 const API_BASE_URL = "http://localhost:8000" 
 const api = axios.create({
@@ -994,18 +994,7 @@ export const getCurrentSolde = async (): Promise<EmployeeCurrentSolde> => {
   console.log(response.data)
   return response.data;
 };
-export interface ManagerDashboardData {
-  semaines_a_valider: any[];
-  charge_par_projet: Record<string, { heures: number; taux: number; valeur: number }>;
-  charge_par_categorie: Record<
-    'projet' | 'formation' | 'absence' | 'reunion' | 'admin' | 'autre',
-    { heures: number; label: string }
-  >;
-  charge_par_employe: Record<string, number>;
-  projets_en_retard: number;
-  periode: string;
-  equipes: { id: number; nom: string }[];
-}
+
 export const getManagerDashboard = async (): Promise<ManagerDashboardData> => {
   try {
     const { data } = await axios.get(
@@ -1037,15 +1026,14 @@ export const validateWeek = async (
   action: 'valider' | 'rejeter',
   comment = ''
 ): Promise<void> => {
-  // Obliger un motif de rejet
+
   if (action === 'rejeter' && !comment.trim()) {
     throw new Error('Veuillez indiquer un motif de rejet.');
   }
 
   try {
     await axios.post(
-      // ✅  URL conforme au routeur DRF :
-      //     /gestion-imputations-projet/manager/dashboard/<id>/valider-semaine/
+  
       `${API_BASE_URL}/gestion-imputations-projet/manager/dashboard/${weekId}/valider-semaine/`,
       { action, commentaire: comment },
       { headers: getAuthHeaders() }
@@ -1579,5 +1567,17 @@ export const fetchSubmittedImputationsManager = async (): Promise<any[]> => {
       error.response?.data?.detail ||
       'Impossible de récupérer les imputations soumises'
     );
+  }
+};
+export const getManagerProjects = async (): Promise<LightProject[]> => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/gestion-imputations-projet/manager/dashboard/projets/`,
+      { headers: getAuthHeaders() }
+    );
+    return response.data; // [{id, nom}, ...]
+  } catch (error) {
+    console.error('Error fetching manager projects:', error);
+    throw new Error('Erreur lors de la récupération des projets');
   }
 };
