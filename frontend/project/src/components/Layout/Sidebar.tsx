@@ -64,8 +64,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange, isCol
          
          
           { id: "performance", label: "Performance", icon: TrendingUp },
-           { id: "history", label: "Historique ", icon: History },
-          { id: "summary", label: "Feuille de temps", icon: Clock },
+           { id: "history", label: "Feuille de temps ", icon: Clock },
+         
          
           
         ]

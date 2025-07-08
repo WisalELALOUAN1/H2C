@@ -9,6 +9,7 @@ from .views import (
     SyntheseMensuelleView,
     DailyImputationView,
     FormationViewSet,
+    ManagerSubmittedImputationsView
 )
 
 router = DefaultRouter()
@@ -29,4 +30,9 @@ urlpatterns = [
     path('imputations/journalieres/', DailyImputationView.as_view(), name='daily-imputations'),
     path('imputations/journalieres/<str:date>/', DailyImputationView.as_view(), name='daily-imputations-date'),
     path('imputations/<int:id>/', DailyImputationView.as_view(), name='delete-imputation'),
+     path(
+        'manager/imputations-soumis/',
+        ManagerSubmittedImputationsView.as_view(),
+        name='manager-imputations-soumis'
+    ),
 ]

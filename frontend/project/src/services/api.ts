@@ -1,5 +1,5 @@
 import axios from "axios"
-import type { GlobalRules, User, EquipeFormData,Formation, Equipe ,WeekStatus,ImputationHoraire,ProjetFormData,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,ManagerDashboardData,Projet,TimeEntryData} from "../types"
+import type { GlobalRules, User, EquipeFormData,Formation, Equipe ,WeekStatus,ImputationHoraire,ProjetFormData,UserFormData,LeaveRequest,EmployeeCurrentSolde,SoldeHistory,MonthlySummary,WeeklyImputation,ReportData,ReportParams,Projet,TimeEntryData} from "../types"
 
 const API_BASE_URL = "http://localhost:8000" 
 const api = axios.create({
@@ -994,27 +994,40 @@ export const getCurrentSolde = async (): Promise<EmployeeCurrentSolde> => {
   console.log(response.data)
   return response.data;
 };
-
+export interface ManagerDashboardData {
+  semaines_a_valider: any[];
+  charge_par_projet: Record<string, { heures: number; taux: number; valeur: number }>;
+  charge_par_categorie: Record<
+    'projet' | 'formation' | 'absence' | 'reunion' | 'admin' | 'autre',
+    { heures: number; label: string }
+  >;
+  charge_par_employe: Record<string, number>;
+  projets_en_retard: number;
+  periode: string;
+  equipes: { id: number; nom: string }[];
+}
 export const getManagerDashboard = async (): Promise<ManagerDashboardData> => {
   try {
-    const response = await axios.get(
-      `${API_BASE_URL}/gestion-imputations-projet/manager/dashboard/`, 
+    const { data } = await axios.get(
+      `${API_BASE_URL}/gestion-imputations-projet/manager/dashboard/`,
       { headers: getAuthHeaders() }
     );
-    
+
     return {
-      semaines_a_valider: response.data.semaines_a_valider || [],
-      charge_par_projet: response.data.charge_par_projet || {},
-      charge_par_employe: response.data.charge_par_employe || {},
-      projets_en_retard: response.data.projets_en_retard || 0,
-      periode: response.data.periode || '',
-      equipes: response.data.equipes || []
+      semaines_a_valider: data.semaines_a_valider ?? [],
+      charge_par_projet: data.charge_par_projet ?? {},
+      charge_par_categorie: data.charge_par_categorie ?? {},
+      charge_par_employe: data.charge_par_employe ?? {},
+      projets_en_retard: data.projets_en_retard ?? 0,
+      periode: data.periode ?? '',
+      equipes: data.equipes ?? []
     };
-  } catch (error) {
-    console.error('Error fetching manager dashboard:', error);
-    throw new Error('Erreur lors de la récupération des données du tableau de bord');
+  } catch (err) {
+    console.error('[getManagerDashboard]', err);
+    throw new Error('Erreur lors de la récupération du tableau de bord');
   }
 };
+
 
 /**
  * Valide ou rejette une semaine d'imputation
@@ -1024,15 +1037,25 @@ export const validateWeek = async (
   action: 'valider' | 'rejeter',
   comment = ''
 ): Promise<void> => {
+  // Obliger un motif de rejet
+  if (action === 'rejeter' && !comment.trim()) {
+    throw new Error('Veuillez indiquer un motif de rejet.');
+  }
+
   try {
     await axios.post(
-      `${API_BASE_URL}/gestion-imputations-projet/manager/semaines/${weekId}/valider/`,
+      // ✅  URL conforme au routeur DRF :
+      //     /gestion-imputations-projet/manager/dashboard/<id>/valider-semaine/
+      `${API_BASE_URL}/gestion-imputations-projet/manager/dashboard/${weekId}/valider-semaine/`,
       { action, commentaire: comment },
       { headers: getAuthHeaders() }
     );
-  } catch (error) {
-    console.error('Error validating week:', error);
-    throw new Error(`Erreur lors de ${action === 'valider' ? 'la validation' : 'du rejet'} de la semaine`);
+  } catch (error: any) {
+    console.error('[validateWeek] API error:', error?.response?.data || error);
+    throw new Error(
+      error?.response?.data?.detail ||
+      `Erreur lors ${action === 'valider' ? 'de la validation' : 'du rejet'} de la semaine`
+    );
   }
 };
 
@@ -1540,6 +1563,21 @@ export const submitWeeklyTimesheet = async (): Promise<WeekStatus> => {
       e.response?.data?.error
       ?? e.response?.data?.detail
       ?? 'Erreur lors de la soumission de la semaine'
+    );
+  }
+};
+export const fetchSubmittedImputationsManager = async (): Promise<any[]> => {
+  try {
+    const response = await api.get(
+      '/gestion-imputations-projet/manager/imputations-soumis/',
+      { headers: getAuthHeaders() }
+    );
+    return response.data;     
+  } catch (error: any) {
+    console.error('Erreur récupération imputations soumis :', error);
+    throw new Error(
+      error.response?.data?.detail ||
+      'Impossible de récupérer les imputations soumises'
     );
   }
 };

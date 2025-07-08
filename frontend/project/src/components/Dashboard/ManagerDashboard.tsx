@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   getManagerDashboard,
   validateWeek,
-  getTeamReport
+  getTeamReport,
+  ManagerDashboardData
 } from '../../services/api';
 import {
   Clock,
@@ -12,10 +13,10 @@ import {
   XCircle,
   TrendingUp,
   FileText,
-  Calendar
+  Calendar,
+  Activity
 } from 'lucide-react';
 
-// Error Boundary Component
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean; error?: Error }
@@ -125,7 +126,7 @@ const TabNavigation: React.FC<{
 };
 
 const DashboardTab: React.FC<{
-  dashboardData: any;
+  dashboardData: ManagerDashboardData;
   loading: boolean;
 }> = ({ dashboardData, loading }) => {
   if (loading) return <LoadingSpinner />;
@@ -180,6 +181,16 @@ const DashboardTab: React.FC<{
                 </div>
               </div>
               
+              <div className="bg-gradient-to-r from-sky-50 to-sky-100 p-4 rounded-lg border border-sky-200">
+                <div className="text-sm text-sky-700 mb-1">H. non productives</div>
+                <div className="text-2xl font-bold text-sky-600">
+                  {Object.values(dashboardData?.charge_par_categorie ?? {})
+                    .filter(c => c.label !== 'Projets')
+                    .reduce((t, c) => t + c.heures, 0)
+                    .toFixed(1)}h
+                </div>
+              </div>
+              
               <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200">
                 <div className="text-sm text-gray-700 mb-1">Période</div>
                 <div className="text-lg font-semibold text-gray-800">
@@ -188,6 +199,45 @@ const DashboardTab: React.FC<{
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Charge par catégorie */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">
+          Répartition par catégorie
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gradient-to-r from-amber-800 to-amber-700 text-white">
+              <tr>
+                <th className="px-6 py-4 text-left">Catégorie</th>
+                <th className="px-6 py-4 text-left">Heures</th>
+                <th className="px-6 py-4 text-left">Pourcentage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(dashboardData?.charge_par_categorie ?? {})
+                .map(([key, cat]: [string, any], idx) => {
+                  const totalHours = Object.values(dashboardData?.charge_par_categorie ?? {})
+                    .reduce((sum: number, c: any) => sum + c.heures, 0);
+                  const percentage = totalHours > 0 ? (cat.heures / totalHours * 100) : 0;
+                  
+                  return (
+                    <tr key={key}
+                        className={`border-b hover:bg-amber-50/30 ${idx % 2 ? 'bg-amber-50/20' : 'bg-white'}`}>
+                      <td className="px-6 py-4 font-semibold">{cat.label}</td>
+                      <td className="px-6 py-4 font-bold text-amber-600">
+                        {cat.heures.toFixed(1)} h
+                      </td>
+                      <td className="px-6 py-4 font-bold text-blue-600">
+                        {percentage.toFixed(1)}%
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -227,6 +277,15 @@ const ValidationTab: React.FC<{
 }> = ({ weeksToValidate, loading, onValidate }) => {
   const [comment, setComment] = useState('');
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const [selectedAction, setSelectedAction] = useState<'valider' | 'rejeter'>('valider');
+
+  // Remove duplicates based on week ID
+  const uniqueWeeks = useMemo(
+    () => Array.from(
+            new Map((weeksToValidate ?? [])
+                     .map(w => [w.id, w])).values()),
+    [weeksToValidate]
+  );
 
   if (loading) return <LoadingSpinner />;
 
@@ -236,8 +295,8 @@ const ValidationTab: React.FC<{
         <CheckCircle className="w-8 h-8 text-amber-600" />
         <h2 className="text-2xl font-bold text-gray-800">Validation des imputations</h2>
       </div>
-
-      {weeksToValidate.length === 0 ? (
+      
+      {uniqueWeeks.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
           Aucune semaine à valider
         </div>
@@ -255,18 +314,18 @@ const ValidationTab: React.FC<{
                 </tr>
               </thead>
               <tbody>
-                {weeksToValidate.map((week, index) => (
+                {uniqueWeeks.map((week, index) => (
                   <tr key={week.id} className={`border-b hover:bg-amber-50/30 ${
                     index % 2 === 0 ? 'bg-amber-50/20' : 'bg-white'
                   }`}>
                     <td className="px-6 py-4 font-semibold">
-                      {week.employe.prenom} {week.employe.nom}
+                      {week.employe_nom}
                     </td>
                     <td className="px-6 py-4">
                       Semaine {week.semaine}, {week.annee}
                     </td>
                     <td className="px-6 py-4 font-bold text-amber-600">
-                      {week.total_heures?.toFixed(1) || '0'}h
+                      {(week.total_heures ?? 0).toFixed(1)}h
                     </td>
                     <td className="px-6 py-4">
                       <StatusBadge status={week.statut} />
@@ -275,6 +334,7 @@ const ValidationTab: React.FC<{
                       <button
                         onClick={() => {
                           setSelectedWeek(week.id);
+                          setSelectedAction('valider');
                           setComment('');
                         }}
                         className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors"
@@ -284,6 +344,7 @@ const ValidationTab: React.FC<{
                       <button
                         onClick={() => {
                           setSelectedWeek(week.id);
+                          setSelectedAction('rejeter');
                           setComment('');
                         }}
                         className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
@@ -302,15 +363,13 @@ const ValidationTab: React.FC<{
       {selectedWeek && (
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            {weeksToValidate.find(w => w.id === selectedWeek)?.statut === 'rejete' 
-              ? 'Commentaire de rejet' 
-              : 'Confirmer la validation'}
+            {selectedAction === 'valider' ? 'Confirmer la validation' : 'Motif de rejet'}
           </h3>
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-lg mb-4"
-            placeholder="Commentaire (optionnel)"
+            className="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+            placeholder={selectedAction === 'valider' ? 'Commentaire (optionnel)' : 'Motif de rejet (obligatoire)'}
             rows={3}
           />
           <div className="flex justify-end space-x-3">
@@ -322,21 +381,16 @@ const ValidationTab: React.FC<{
             </button>
             <button
               onClick={() => {
-                const action = weeksToValidate.find(w => w.id === selectedWeek)?.statut === 'rejete' 
-                  ? 'valider' 
-                  : 'rejeter';
-                onValidate(selectedWeek, action, comment);
+                onValidate(selectedWeek, selectedAction, comment);
                 setSelectedWeek(null);
               }}
               className={`${
-                weeksToValidate.find(w => w.id === selectedWeek)?.statut === 'rejete' 
+                selectedAction === 'valider' 
                   ? 'bg-green-500 hover:bg-green-600' 
                   : 'bg-red-500 hover:bg-red-600'
               } text-white px-4 py-2 rounded-lg transition-colors`}
             >
-              {weeksToValidate.find(w => w.id === selectedWeek)?.statut === 'rejete' 
-                ? 'Valider' 
-                : 'Rejeter'}
+              {selectedAction === 'valider' ? 'Valider' : 'Rejeter'}
             </button>
           </div>
         </div>
@@ -379,7 +433,7 @@ const ReportingTab: React.FC<{
                 type="date"
                 value={params.dateDebut}
                 onChange={(e) => setParams({...params, dateDebut: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-lg"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
               />
             </div>
             <div>
@@ -390,7 +444,7 @@ const ReportingTab: React.FC<{
                 type="date"
                 value={params.dateFin}
                 onChange={(e) => setParams({...params, dateFin: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-lg"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
               />
             </div>
           </div>
@@ -404,7 +458,7 @@ const ReportingTab: React.FC<{
               value={params.projetId}
               onChange={(e) => setParams({...params, projetId: e.target.value})}
               placeholder="ID du projet"
-              className="w-full p-2 border border-gray-300 rounded-lg"
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
             />
           </div>
 
@@ -415,7 +469,7 @@ const ReportingTab: React.FC<{
             <select
               value={params.format}
               onChange={(e) => setParams({...params, format: e.target.value})}
-              className="w-full p-2 border border-gray-300 rounded-lg"
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
             >
               <option value="json">JSON</option>
               <option value="csv">CSV</option>
@@ -441,7 +495,7 @@ const ReportingTab: React.FC<{
 const ManagerDashboard: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
-  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [dashboardData, setDashboardData] = useState<ManagerDashboardData | null>(null);
   const [loading, setLoading] = useState({
     dashboard: false,
     validation: false,
@@ -493,10 +547,13 @@ const ManagerDashboard: React.FC = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `rapport_equipe_${new Date().toISOString()}.json`;
+        a.download = `rapport_equipe_${new Date().toISOString().split('T')[0]}.json`;
         a.click();
+        URL.revokeObjectURL(url);
+      } else if (report.downloadUrl) {
+        window.open(report.downloadUrl, '_blank');
       }
-      // Add CSV and PDF handling here
+     
       setError(null);
     } catch (err) {
       console.error('Erreur:', err);
@@ -505,6 +562,15 @@ const ManagerDashboard: React.FC = () => {
       setLoading(prev => ({...prev, reporting: false}));
     }
   };
+
+  // Calculate non-productive hours for stat card
+  const nonProductiveHours = useMemo(() => {
+    if (!dashboardData?.charge_par_categorie) return '0';
+    return Object.values(dashboardData.charge_par_categorie)
+      .filter(c => c.label !== 'Projets')
+      .reduce((t, c) => t + c.heures, 0)
+      .toFixed(1);
+  }, [dashboardData]);
 
   if (!user || user.role !== 'manager') {
     return (
@@ -543,24 +609,30 @@ const ManagerDashboard: React.FC = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
             <StatCard
               icon={<Users className="w-8 h-8" />}
-              value={dashboardData?.equipes?.length || '0'}
+              value={dashboardData?.equipes?.length?.toString() || '0'}
               label="Équipes"
               gradient="bg-gradient-to-br from-amber-600 to-amber-700"
             />
             <StatCard
               icon={<CheckCircle className="w-8 h-8" />}
-              value={dashboardData?.semaines_a_valider?.length || '0'}
+              value={dashboardData?.semaines_a_valider?.length?.toString() || '0'}
               label="À valider"
               gradient="bg-gradient-to-br from-orange-600 to-orange-700"
             />
             <StatCard
               icon={<XCircle className="w-8 h-8" />}
-              value={dashboardData?.projets_en_retard || '0'}
+              value={dashboardData?.projets_en_retard?.toString() || '0'}
               label="Retards"
               gradient="bg-gradient-to-br from-red-600 to-red-700"
+            />
+            <StatCard
+              icon={<Activity className="w-8 h-8" />}
+              value={`${nonProductiveHours}h`}
+              label="H. non productives"
+              gradient="bg-gradient-to-br from-sky-600 to-sky-700"
             />
             <StatCard
               icon={<Calendar className="w-8 h-8" />}
@@ -575,7 +647,7 @@ const ManagerDashboard: React.FC = () => {
           <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
             {activeTab === 0 && (
               <DashboardTab 
-                dashboardData={dashboardData} 
+                dashboardData={dashboardData!} 
                 loading={loading.dashboard} 
               />
             )}
