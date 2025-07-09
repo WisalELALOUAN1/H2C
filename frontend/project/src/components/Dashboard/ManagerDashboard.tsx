@@ -7,10 +7,6 @@ import {
 } from '../../services/api';
 import { ManagerDashboardData, LightProject } from '../../types';
 import {
-  generateDetailedEmployeeReport,
-  generateGlobalSummaryReport
-} from '../../utils/reportGeneratorForManager';
-import {
   Clock,
   Users,
   CheckCircle,
@@ -21,10 +17,81 @@ import {
   Activity,
   Download
 } from 'lucide-react';
+import { startOfWeek, endOfWeek, format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { jsPDF } from 'jspdf';
+// Génération unifié des rapports
+const generateUnifiedJSONReport = (data: any, filename: string, isProjectSpecific: boolean = false, projectName?: string) => {
+  const reportData = {
+    metadata: {
+      type: isProjectSpecific ? 'project-specific' : 'global',
+      projectName: isProjectSpecific ? projectName : null,
+      generatedAt: new Date().toISOString(),
+      period: `Semaine courante`,
+      format: 'json'
+    },
+    summary: {
+      totalHours: Object.values(data.charge_par_employe || {}).reduce((sum: number, h: any) => sum + h, 0),
+      totalProjects: Object.keys(data.charge_par_projet || {}).length,
+      totalEmployees: Object.keys(data.charge_par_employe || {}).length,
+      totalCategories: Object.keys(data.charge_par_categorie || {}).length,
+      productiveHours: Object.values(data.charge_par_categorie || {})
+        .filter((cat: any) => cat.label === 'Projets')
+        .reduce((sum: number, cat: any) => sum + cat.heures, 0),
+      weeksPendingValidation: data.semaines_a_valider?.length || 0
+    },
+    detailedData: {
+      charge_par_projet: data.charge_par_projet || {},
+      charge_par_employe: data.charge_par_employe || {},
+      charge_par_categorie: data.charge_par_categorie || {},
+      semaines_a_valider: data.semaines_a_valider || [],
+      projets_en_retard: data.projets_en_retard || 0,
+      periode: data.periode || 'N/A'
+    },
+    analytics: {
+      productivityRate: (() => {
+        const total = Object.values(data.charge_par_employe || {}).reduce((sum: number, h: any) => sum + h, 0);
+        const productive = Object.values(data.charge_par_categorie || {})
+          .filter((cat: any) => cat.label === 'Projets')
+          .reduce((sum: number, cat: any) => sum + cat.heures, 0);
+        return total > 0 ? (productive / total * 100) : 0;
+      })(),
+      averageHoursPerEmployee: (() => {
+        const total = Object.values(data.charge_par_employe || {}).reduce((sum: number, h: any) => sum + h, 0);
+        const count = Object.keys(data.charge_par_employe || {}).length;
+        return count > 0 ? total / count : 0;
+      })(),
+      projectDistribution: Object.entries(data.charge_par_projet || {}).map(([name, info]: [string, any]) => ({
+        name,
+        hours: info.heures,
+        value: info.valeur,
+        percentage: (() => {
+          const total = Object.values(data.charge_par_projet || {}).reduce((sum: number, p: any) => sum + p.heures, 0);
+          return total > 0 ? (info.heures / total * 100) : 0;
+        })()
+      })),
+      categoryDistribution: Object.entries(data.charge_par_categorie || {}).map(([key, cat]: [string, any]) => ({
+        key,
+        label: cat.label,
+        hours: cat.heures,
+        percentage: (() => {
+          const total = Object.values(data.charge_par_categorie || {}).reduce((sum: number, c: any) => sum + c.heures, 0);
+          return total > 0 ? (cat.heures / total * 100) : 0;
+        })()
+      })),
+      employeePerformance: Object.entries(data.charge_par_employe || {}).map(([name, hours]: [string, any]) => {
+        const avgHours = Object.values(data.charge_par_employe || {}).reduce((sum: number, h: any) => sum + h, 0) / Object.keys(data.charge_par_employe || {}).length;
+        return {
+          name,
+          hours,
+          performance: hours >= avgHours ? 'Au-dessus' : 'En-dessous',
+          deviationFromAverage: hours - avgHours
+        };
+      })
+    }
+  };
 
-// Frontend report generation utilities
-const generateJSONReport = (data: any, filename: string) => {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -33,111 +100,607 @@ const generateJSONReport = (data: any, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
-const generateCSVReport = (data: any, filename: string) => {
- 
-  let csv = 'Type, Intitulé du projet ,Employe,Heures\n'; 
-
-
-  Object.entries(data.charge_par_projet || {}).forEach(
-    ([projet, { heures }]: [string, any]) => {
-      Object.keys(data.charge_par_employe || {}).forEach(emp => {
-        csv += `Projet,"${projet}","${emp}",${heures}\n`;
-      });
-    }
-  );
-
-
-  Object.entries(data.charge_par_categorie || {})
-    .filter(([, c]: [string, any]) => c.label !== 'Projets')
-    .forEach(([, cat]: [string, any]) => {
-      Object.keys(data.charge_par_employe || {}).forEach(emp => {
-        csv += `"${cat.label}",-,"${emp}",${cat.heures}\n`;
-      });
-    });
-
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  Object.assign(document.createElement('a'), { href: url, download: filename }).click();
+const generateUnifiedCSVReport = (data: any, filename: string, isProjectSpecific: boolean = false, projectName?: string) => {
+  let csvContent = 'Section,Type,Nom,Heures,Valeur,Pourcentage,Statut\n';
+  
+  // Métadonnées
+  csvContent += `Métadonnées,Rapport,${isProjectSpecific ? 'Spécifique au projet' : 'Global'},,,,\n`;
+  csvContent += `Métadonnées,Projet,${isProjectSpecific ? projectName : 'Tous les projets'},,,,\n`;
+  csvContent += `Métadonnées,Période,Semaine courante,,,,\n`;
+  csvContent += `Métadonnées,Généré le,${new Date().toLocaleString('fr-FR')},,,,\n`;
+  csvContent += '\n';
+  
+  // Résumé
+  const totalHours = Object.values(data.charge_par_employe || {}).reduce((sum: number, h: any) => sum + h, 0);
+  const totalProjects = Object.keys(data.charge_par_projet || {}).length;
+  const totalEmployees = Object.keys(data.charge_par_employe || {}).length;
+  const productiveHours = Object.values(data.charge_par_categorie || {})
+    .filter((cat: any) => cat.label === 'Projets')
+    .reduce((sum: number, cat: any) => sum + cat.heures, 0);
+  const productivityRate = totalHours > 0 ? (productiveHours / totalHours * 100) : 0;
+  
+  csvContent += `Résumé,Total heures,,${totalHours.toFixed(1)},,${productivityRate.toFixed(1)}%,\n`;
+  csvContent += `Résumé,Total projets,,${totalProjects},,,,\n`;
+  csvContent += `Résumé,Total employés,,${totalEmployees},,,,\n`;
+  csvContent += `Résumé,Heures productives,,${productiveHours.toFixed(1)},,${productivityRate.toFixed(1)}%,\n`;
+  csvContent += `Résumé,Semaines à valider,,${data.semaines_a_valider?.length || 0},,,,\n`;
+  csvContent += '\n';
+  
+  // Données des projets
+  const totalProjectHours = Object.values(data.charge_par_projet || {}).reduce((sum: number, p: any) => sum + p.heures, 0);
+  Object.entries(data.charge_par_projet || {}).forEach(([projet, info]: [string, any]) => {
+    const percentage = totalProjectHours > 0 ? ((info.heures / totalProjectHours) * 100).toFixed(1) : '0.0';
+    csvContent += `Projets,Projet,"${projet}",${info.heures.toFixed(1)},${info.valeur.toFixed(2)},${percentage}%,\n`;
+  });
+  csvContent += '\n';
+  
+  // Données des employés
+  const totalEmployeeHours = Object.values(data.charge_par_employe || {}).reduce((sum: number, h: any) => sum + h, 0);
+  const avgHoursPerEmployee = totalEmployees > 0 ? totalEmployeeHours / totalEmployees : 0;
+  Object.entries(data.charge_par_employe || {}).forEach(([employe, heures]: [string, any]) => {
+    const percentage = totalEmployeeHours > 0 ? ((heures / totalEmployeeHours) * 100).toFixed(1) : '0.0';
+    const performance = heures >= avgHoursPerEmployee ? 'Au-dessus' : 'En-dessous';
+    csvContent += `Employés,Employé,"${employe}",${heures.toFixed(1)},0,${percentage}%,${performance}\n`;
+  });
+  csvContent += '\n';
+  
+  // Données des catégories
+  const totalCategoryHours = Object.values(data.charge_par_categorie || {}).reduce((sum: number, c: any) => sum + c.heures, 0);
+  Object.entries(data.charge_par_categorie || {}).forEach(([key, cat]: [string, any]) => {
+    const percentage = totalCategoryHours > 0 ? ((cat.heures / totalCategoryHours) * 100).toFixed(1) : '0.0';
+    csvContent += `Catégories,Catégorie,"${cat.label}",${cat.heures.toFixed(1)},0,${percentage}%,\n`;
+  });
+  
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
   URL.revokeObjectURL(url);
 };
 
+interface ProjectInfo {
+  heures: number;
+  valeur: number;
+}
 
-const generatePDFReport = async (data: any, filename: string) => {
-  const { jsPDF } = await import('jspdf');
-  const { format } = await import('date-fns');
-  const { fr } = await import('date-fns/locale');
-  
+interface CategoryInfo {
+  label: string;
+  heures: number;
+}
+
+interface ReportData {
+  charge_par_projet: Record<string, ProjectInfo>;
+  charge_par_employe: Record<string, number>;
+  charge_par_categorie: Record<string, CategoryInfo>;
+  semaines_a_valider?: unknown[];
+}
+
+const CHART_COLORS = [
+  '#1e40af', '#059669', '#dc2626', '#d97706', '#0891b2',
+  '#16a34a', '#7c3aed', '#e11d48', '#0d9488', '#4f46e5'
+];
+
+const generateUnifiedPDFReport = async (
+  data: ReportData,
+  filename: string,
+  isProjectSpecific: boolean = false,
+  projectName?: string
+): Promise<void> => {
   const pdf = new jsPDF({
     orientation: 'p',
     unit: 'mm',
-    format: 'a4'
+    format: 'a4',
+    filters: ['ASCIIHexEncode']
   });
-  
+
   const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
   let yPosition = 20;
-  
-  // Header
+
+  // Fonction pour générer un graphique en barres avec police très réduite
+  const generateBarChart = (labels: string[], values: number[], title: string): string => {
+    const width = 190;
+    const height = 100;
+    const margin = { top: 20, right: 20, bottom: 40, left: 40 };
+
+    return `
+      <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="#ffffff" rx="4" ry="4" />
+        <text x="${width/2}" y="15" text-anchor="middle" font-size="6" font-weight="bold">${title}</text>
+        ${values.map((value, i) => {
+          const barWidth = 20;
+          const barX = margin.left + (i * 30);
+          const barHeight = (value / Math.max(...values, 1)) * (height - margin.top - margin.bottom);
+          const barY = height - margin.bottom - barHeight;
+          
+          return `
+            <rect x="${barX}" y="${barY}" width="${barWidth}" height="${barHeight}" 
+                  fill="${CHART_COLORS[i % CHART_COLORS.length]}" rx="2" />
+            <text x="${barX + barWidth/2}" y="${barY - 5}" text-anchor="middle" font-size="5">
+              ${value.toFixed(1)}
+            </text>
+          `;
+        }).join('')}
+        <line x1="${margin.left}" y1="${height - margin.bottom}" 
+              x2="${width - margin.right}" y2="${height - margin.bottom}" 
+              stroke="#000000" stroke-width="1" />
+        ${labels.map((label, i) => {
+          const labelX = margin.left + (i * 30) + 10;
+          const labelY = height - 25;
+          return `
+            <text x="${labelX}" y="${labelY}" text-anchor="middle" font-size="5" transform="rotate(45, ${labelX}, ${labelY})">
+              ${label}
+            </text>
+          `;
+        }).join('')}
+      </svg>
+    `;
+  };
+
+  // Fonction pour générer un diagramme circulaire avec taille réduite
+  const generatePieChart = (
+  data: { label: string; value: number }[],
+  title: string
+): string => {
+  /* --- paramètres de base ------------------------------------------- */
+  const radius         = 30;  // rayon du camembert (mm)
+  const legendFontSize = 3;   // pt : petit mais lisible
+  const maxChars       = 18;  // troncature des libellés
+  const legendGap      = 10;  // espace entre camembert et légende (mm)
+
+  /* --- préparation des libellés complets ---------------------------- */
+  const total          = data.reduce((s, d) => s + d.value, 0);
+  const legendStrings  = data.map(item => {
+    const lbl = item.label.length > maxChars
+      ? item.label.slice(0, maxChars - 1) + '…'
+      : item.label;
+    const pct = total ? ((item.value / total) * 100).toFixed(1) : '0';
+    return `${lbl} (${pct}%)`;
+  });
+
+  /* --- largeur minimale de légende ---------------------------------- */
+  // ≈ 0,6 mm par caractère pour une police 3 pt
+  const longest       = Math.max(...legendStrings.map(s => s.length));
+  const legendWidth   = longest * legendFontSize * 0.6 + 16; // 16 mm = carré couleur + marge
+  const width         = radius * 2 + legendGap + legendWidth;
+  const height        = Math.max(radius * 2 + 20, data.length * 10); // 10 mm/ligne légende
+  const center        = { x: radius + 5, y: height / 2 };            // marge gauche 5 mm
+
+  /* --- construction du SVG ------------------------------------------ */
+  let cumulativeAngle = 0;
+  return `
+    <svg width="${width}" height="${height}"
+         viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#ffffff" rx="4" ry="4" />
+
+      <!-- Titre -->
+      <text x="${width / 2}" y="8" text-anchor="middle"
+            font-size="5" font-weight="bold">${title}</text>
+
+      <!-- Parts du camembert -->
+      ${data.map((item, i) => {
+        const angle = (item.value / total) * 360;
+        const start = cumulativeAngle;
+        cumulativeAngle += angle;
+        const large = angle > 180 ? 1 : 0;
+
+        const x2 = center.x + radius * Math.cos(start * Math.PI / 180);
+        const y2 = center.y + radius * Math.sin(start * Math.PI / 180);
+        const x3 = center.x + radius * Math.cos((start + angle) * Math.PI / 180);
+        const y3 = center.y + radius * Math.sin((start + angle) * Math.PI / 180);
+
+        return `
+          <path d="M${center.x},${center.y} L${x2},${y2}
+                   A${radius},${radius} 0 ${large} 1 ${x3},${y3} Z"
+                fill="${CHART_COLORS[i % CHART_COLORS.length]}"
+                stroke="#ffffff" stroke-width="1" />
+        `;
+      }).join('')}
+
+      <!-- Légende -->
+      ${legendStrings.map((txt, i) => {
+        const lx = radius * 2 + legendGap;
+        const ly = 20 + i * 10;
+        return `
+          <rect x="${lx}" y="${ly - 4}" width="8" height="8"
+                fill="${CHART_COLORS[i % CHART_COLORS.length]}" />
+          <text x="${lx + 10}" y="${ly + 1}" font-size="${legendFontSize}">
+            ${txt}
+          </text>
+        `;
+      }).join('')}
+    </svg>
+  `;
+};
+
+  // Fonction pour ajouter un SVG au PDF
+  const addSVGToPDF = async (svg: string, x: number, y: number, width: number, height: number): Promise<void> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = width * 5;
+        canvas.height = height * 5;
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        const pngData = canvas.toDataURL('image/png');
+        pdf.addImage(pngData, 'PNG', x, y, width, height);
+        resolve();
+      };
+      
+      img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+    });
+  };
+
+  // Fonction pour générer l'analyse
+  const generateAnalysis = (data: ReportData): string => {
+    const totalHours = Object.values(data.charge_par_employe).reduce((sum, h) => sum + h, 0);
+    const totalProjects = Object.keys(data.charge_par_projet).length;
+    const totalEmployees = Object.keys(data.charge_par_employe).length;
+    
+    const productiveHours = Object.values(data.charge_par_categorie)
+      .filter(cat => cat.label === 'Projets')
+      .reduce((sum, cat) => sum + cat.heures, 0);
+    const productivityRate = totalHours > 0 ? (productiveHours / totalHours) * 100 : 0;
+    
+    // Projet le plus consommateur
+    const topProject = Object.entries(data.charge_par_projet)
+      .sort((a, b) => b[1].heures - a[1].heures)[0];
+    
+    // Employé le plus actif
+    const topEmployee = Object.entries(data.charge_par_employe)
+      .sort((a, b) => b[1] - a[1])[0];
+    
+    // Catégorie dominante
+    const topCategory = Object.values(data.charge_par_categorie)
+      .sort((a, b) => b.heures - a.heures)[0];
+    
+    // Moyenne heures par employé
+    const avgHoursPerEmployee = totalHours / totalEmployees;
+    
+    // Valeur totale générée
+    const totalValue = Object.values(data.charge_par_projet)
+      .reduce((sum, proj) => sum + proj.valeur, 0);
+    
+    let analysis = `ANALYSE DÉTAILLÉE\n\n`;
+    analysis += `Performance Globale:\n`;
+    analysis += `• ${totalHours.toFixed(1)} heures travaillées au total\n`;
+    analysis += `• Taux de productivité: ${productivityRate.toFixed(1)}%\n`;
+    analysis += `• Valeur générée: ${totalValue.toFixed(2)}€\n`;
+    analysis += `• Ratio valeur/heure: ${(totalValue/totalHours).toFixed(2)}€/h\n\n`;
+    
+    analysis += `Projets:\n`;
+    analysis += `• ${totalProjects} projets actifs\n`;
+    if (topProject) {
+      analysis += `• Projet principal: ${topProject[0]} (${topProject[1].heures.toFixed(1)}h)\n`;
+      analysis += `• Représente ${((topProject[1].heures/totalHours)*100).toFixed(1)}% du temps total\n`;
+    }
+    analysis += `\n`;
+    
+    analysis += `Ressources Humaines:\n`;
+    analysis += `• ${totalEmployees} employés actifs\n`;
+    analysis += `• Moyenne: ${avgHoursPerEmployee.toFixed(1)}h/employé\n`;
+    if (topEmployee) {
+      analysis += `• Employé le plus actif: ${topEmployee[0]} (${topEmployee[1].toFixed(1)}h)\n`;
+    }
+    analysis += `\n`;
+    
+    analysis += `Répartition des Activités:\n`;
+    if (topCategory) {
+      analysis += `• Catégorie dominante: ${topCategory.label} (${topCategory.heures.toFixed(1)}h)\n`;
+      analysis += `• Représente ${((topCategory.heures/totalHours)*100).toFixed(1)}% du temps\n`;
+    }
+    
+    // Recommandations
+    analysis += `\nRECOMMANDATIONS:\n`;
+    if (productivityRate < 70) {
+      analysis += `• Améliorer la productivité (actuellement ${productivityRate.toFixed(1)}%)\n`;
+    }
+    if (totalValue/totalHours < 50) {
+      analysis += `• Optimiser la rentabilité des projets\n`;
+    }
+    if (topProject && (topProject[1].heures/totalHours) > 0.5) {
+      analysis += `• Diversifier le portefeuille de projets\n`;
+    }
+    
+    return analysis;
+  };
+
+  // En-tête principal
   pdf.setFillColor(30, 64, 175);
   pdf.rect(0, 0, pageWidth, 40, 'F');
   
   pdf.setTextColor(255, 255, 255);
-  pdf.setFontSize(24);
+  pdf.setFontSize(18);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('RAPPORT D\'ACTIVITÉ', pageWidth / 2, 25, { align: 'center' });
   
-  pdf.setFontSize(12);
+  const reportTitle = isProjectSpecific && projectName 
+    ? `RAPPORT UNIFIÉ - PROJET: ${projectName.toUpperCase()}`
+    : 'RAPPORT UNIFIÉ - ACTIVITÉ HEBDOMADAIRE';
+  
+  pdf.text(reportTitle, pageWidth / 2, 25, { align: 'center' });
+
+  // Période couverte
+  const now = new Date();
+  const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+  
+  pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
-  pdf.text(`Généré le ${format(new Date(), 'dd/MM/yyyy à HH:mm', { locale: fr })}`, pageWidth / 2, 35, { align: 'center' });
+  pdf.text(
+    `Semaine du ${format(weekStart, 'dd/MM/yyyy', { locale: fr })} au ${format(weekEnd, 'dd/MM/yyyy', { locale: fr })}`,
+    pageWidth / 2, 35, { align: 'center' }
+  );
   
   pdf.setTextColor(0, 0, 0);
   yPosition = 50;
+
+  // Calcul des métriques principales
+  const totalHours = Object.values(data.charge_par_employe).reduce((sum, h) => sum + h, 0);
+  const totalProjects = Object.keys(data.charge_par_projet).length;
+  const totalEmployees = Object.keys(data.charge_par_employe).length;
+  const productiveHours = Object.values(data.charge_par_categorie)
+    .filter(cat => cat.label === 'Projets')
+    .reduce((sum, cat) => sum + cat.heures, 0);
+  const productivityRate = totalHours > 0 ? (productiveHours / totalHours) * 100 : 0;
+
+  // Affichage des métriques
+  const metrics = [
+    { title: 'Total Heures', value: `${totalHours.toFixed(1)}h`, color: '#1e40af' },
+    { title: 'Projets', value: `${totalProjects}`, color: '#059669' },
+    { title: 'Employés', value: `${totalEmployees}`, color: '#dc2626' },
+    { title: 'Productivité', value: `${productivityRate.toFixed(1)}%`, color: '#d97706' }
+  ];
+
+  const boxWidth = 45;
+  const boxHeight = 25;
+  const spacing = 5;
+  const startX = (pageWidth - (boxWidth * 4 + spacing * 3)) / 2;
   
-  // Projects section
-  pdf.setFontSize(16);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('RÉPARTITION PAR PROJET', 15, yPosition);
-  yPosition += 10;
-  
-  pdf.setFontSize(12);
-  pdf.setFont('helvetica', 'normal');
-  
-  Object.entries(data.charge_par_projet || {}).forEach(([projet, info]: [string, any]) => {
-    pdf.text(`• ${projet}: ${info.heures.toFixed(1)}h (€${info.valeur.toFixed(2)})`, 15, yPosition);
-    yPosition += 8;
+  metrics.forEach((metric, index) => {
+    const x = startX + index * (boxWidth + spacing);
+    
+    pdf.setFillColor(100, 100, 100, 10);
+    pdf.roundedRect(x + 2, yPosition + 2, boxWidth, boxHeight, 3, 3, 'F');
+    
+    pdf.setFillColor(metric.color);
+    pdf.roundedRect(x, yPosition, boxWidth, boxHeight, 3, 3, 'F');
+    
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(metric.value, x + boxWidth/2, yPosition + 15, { align: 'center' });
+    
+    pdf.setFontSize(8);
+    pdf.text(metric.title, x + boxWidth/2, yPosition + 22, { align: 'center' });
   });
   
-  yPosition += 10;
+  yPosition += 35;
+
+  // Section Analyse
+  pdf.addPage();
+  yPosition = 20;
   
-  // Employees section
-  pdf.setFontSize(16);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('RÉPARTITION PAR EMPLOYÉ', 15, yPosition);
-  yPosition += 10;
+  pdf.setFillColor(30, 64, 175);
+  pdf.rect(0, 0, pageWidth, 15, 'F');
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(14);
+  pdf.text('ANALYSE ET RECOMMANDATIONS', 15, 12);
   
-  pdf.setFontSize(12);
+  pdf.setTextColor(0, 0, 0);
+  yPosition = 30;
+
+  // Génération et affichage de l'analyse
+  const analysisText = generateAnalysis(data);
+  const analysisLines = analysisText.split('\n');
+  
+  pdf.setFontSize(9);
   pdf.setFont('helvetica', 'normal');
   
-  Object.entries(data.charge_par_employe || {}).forEach(([employe, heures]: [string, any]) => {
-    pdf.text(`• ${employe}: ${heures.toFixed(1)}h`, 15, yPosition);
-    yPosition += 8;
+  analysisLines.forEach((line) => {
+    if (yPosition > pageHeight - 20) {
+      pdf.addPage();
+      yPosition = 20;
+    }
+    
+    if (line.includes('ANALYSE DÉTAILLÉE') || line.includes('RECOMMANDATIONS:')) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(30, 64, 175);
+      pdf.text(line, 15, yPosition);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(0, 0, 0);
+    } else if (line.includes(':') && !line.startsWith('•')) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(5, 150, 105);
+      pdf.text(line, 15, yPosition);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(0, 0, 0);
+    } else {
+      pdf.text(line, 15, yPosition);
+    }
+    
+    yPosition += 5;
   });
+
+  // Section Projets
+  pdf.addPage();
+  yPosition = 20;
   
-  yPosition += 10;
+  pdf.setFillColor(30, 64, 175);
+  pdf.rect(0, 0, pageWidth, 15, 'F');
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(14);
+  pdf.text('RÉPARTITION PAR PROJET', 15, 12);
   
-  // Categories section
-  pdf.setFontSize(16);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('RÉPARTITION PAR CATÉGORIE', 15, yPosition);
-  yPosition += 10;
+  pdf.setTextColor(0, 0, 0);
+  yPosition = 30;
+
+  if (totalProjects > 0) {
+    const projectsData = Object.entries(data.charge_par_projet)
+      .sort((a, b) => b[1].heures - a[1].heures)
+      .slice(0, 6);
+    
+    const labels = projectsData.map(([projet]) => projet.substring(0, 15));
+    const values = projectsData.map(([_, info]) => info.heures);
+    
+    const barChartSVG = generateBarChart(labels, values, 'Heures par projet');
+    await addSVGToPDF(barChartSVG, 10, yPosition, 190, 100);
+    yPosition += 110;
+    
+    // Description du graphique
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text('Ce graphique présente la répartition des heures travaillées par projet,', 15, yPosition);
+    pdf.text('permettant d\'identifier les projets les plus consommateurs en temps.', 15, yPosition + 5);
+    pdf.text(`Les ${Math.min(6, totalProjects)} projets principaux représentent ${((values.reduce((sum, val) => sum + val, 0) / totalHours) * 100).toFixed(1)}% du temps total.`, 15, yPosition + 10);
+    
+    yPosition += 20;
+    
+    // Tableau détaillé
+    pdf.setFillColor(243, 244, 246);
+    pdf.rect(10, yPosition, pageWidth - 20, 10, 'F');
+    
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Projet', 15, yPosition + 7);
+    pdf.text('Heures', 120, yPosition + 7);
+    pdf.text('Valeur (€)', 160, yPosition + 7);
+    
+    yPosition += 10;
+    
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    
+    Object.entries(data.charge_par_projet).forEach(([projet, info], index) => {
+      if (yPosition > pageHeight - 20) {
+        pdf.addPage();
+        yPosition = 20;
+      }
+      
+      if (index % 2 === 0) {
+        pdf.setFillColor(249, 250, 251);
+        pdf.rect(10, yPosition - 2, pageWidth - 20, 8, 'F');
+      }
+      
+      pdf.text(projet.length > 25 ? projet.substring(0, 25) + '...' : projet, 15, yPosition + 5);
+      pdf.text(`${info.heures.toFixed(1)}h`, 120, yPosition + 5);
+      pdf.text(`${info.valeur.toFixed(2)}`, 160, yPosition + 5);
+      
+      yPosition += 8;
+    });
+  }
+
+  // Section Employés
+  pdf.addPage();
+  yPosition = 20;
   
-  pdf.setFontSize(12);
-  pdf.setFont('helvetica', 'normal');
+  pdf.setFillColor(30, 64, 175);
+  pdf.rect(0, 0, pageWidth, 15, 'F');
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(14);
+  pdf.text('RÉPARTITION PAR EMPLOYÉ', 15, 12);
   
-  Object.entries(data.charge_par_categorie || {}).forEach(([key, cat]: [string, any]) => {
-    pdf.text(`• ${cat.label}: ${cat.heures.toFixed(1)}h`, 15, yPosition);
-    yPosition += 8;
-  });
+  pdf.setTextColor(0, 0, 0);
+  yPosition = 30;
+
+  if (totalEmployees > 0) {
+    const employeesData = Object.entries(data.charge_par_employe)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([employe, heures]) => ({
+        label: employe.substring(0, 12),
+        value: heures
+      }));
+    
+    const pieChartSVG = generatePieChart(employeesData, 'Heures par employé');
+    await addSVGToPDF(pieChartSVG, 20, yPosition, 100, 80);  // Taille réduite
+    yPosition += 90;  // Espacement réduit
+    
+    // Tableau détaillé
+    const avgHoursPerEmployee = totalHours / totalEmployees;
+    
+    pdf.setFillColor(243, 244, 246);
+    pdf.rect(10, yPosition, pageWidth - 20, 10, 'F');
+    
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Employé', 15, yPosition + 7);
+    pdf.text('Heures', 100, yPosition + 7);
+    pdf.text('Performance', 140, yPosition + 7);
+    
+    yPosition += 10;
+    
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    
+    Object.entries(data.charge_par_employe).forEach(([employe, heures], index) => {
+      if (yPosition > pageHeight - 20) {
+        pdf.addPage();
+        yPosition = 20;
+      }
+      
+      const performance = heures >= avgHoursPerEmployee ? 'Au-dessus' : 'En-dessous';
+      const performanceColor = heures >= avgHoursPerEmployee ? '#059669' : '#dc2626';
+      
+      if (index % 2 === 0) {
+        pdf.setFillColor(249, 250, 251);
+        pdf.rect(10, yPosition - 2, pageWidth - 20, 8, 'F');
+      }
+      
+      pdf.text(employe, 15, yPosition + 5);
+      pdf.text(`${heures.toFixed(1)}h`, 100, yPosition + 5);
+      
+      pdf.setTextColor(performanceColor);
+      pdf.text(performance, 140, yPosition + 5);
+      
+      yPosition += 8;
+    });
+  }
+
+  // Section Catégories
+  pdf.addPage();
+  yPosition = 20;
+  
+  pdf.setFillColor(30, 64, 175);
+  pdf.rect(0, 0, pageWidth, 15, 'F');
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(14);
+  pdf.text('RÉPARTITION PAR CATÉGORIE', 15, 12);
+  
+  pdf.setTextColor(0, 0, 0);
+  yPosition = 30;
+
+  if (Object.keys(data.charge_par_categorie).length > 0) {
+    const categoriesData = Object.values(data.charge_par_categorie)
+      .map(cat => ({
+        label: cat.label,
+        value: cat.heures
+      }));
+    
+    const pieChartSVG = generatePieChart(categoriesData, 'Heures par catégorie');
+    await addSVGToPDF(pieChartSVG, 20, yPosition, 100, 80);  // Taille réduite
+  }
+
+  // Pied de page
+  pdf.setFillColor(243, 244, 246);
+  pdf.rect(0, pageHeight - 15, pageWidth, 15, 'F');
+  
+  pdf.setTextColor(100, 100, 100);
+  pdf.setFontSize(10);
+  pdf.setFont('helvetica', 'italic');
+  pdf.text(
+    `Rapport généré le ${format(now, 'dd/MM/yyyy à HH:mm', { locale: fr })}`,
+    pageWidth / 2,
+    pageHeight - 10,
+    { align: 'center' }
+  );
   
   pdf.save(filename);
 };
@@ -524,25 +1087,54 @@ const ValidationTab: React.FC<{
   );
 };
 
+export const getCurrentWeekRange = () => {
+  const today = new Date();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - today.getDay() + 1); // lundi
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6); // dimanche
+
+  const toISO = (d: Date) => d.toISOString().split('T')[0];
+  return { start: toISO(monday), end: toISO(sunday) };
+};
+
 const ReportingTab: React.FC<{
   onGenerateReport: (params: any) => void;
   loading: boolean;
   projects: LightProject[];
   dashboardData: ManagerDashboardData | null;
 }> = ({ onGenerateReport, loading, projects, dashboardData }) => {
+  const getCurrentWeekDates = () => {
+    const now = new Date();
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+    
+    return {
+      start: format(weekStart, 'yyyy-MM-dd'),
+      end: format(weekEnd, 'yyyy-MM-dd')
+    };
+  };
+  
+  const weekDates = getCurrentWeekDates();
+  
   const [params, setParams] = useState({
-    dateDebut: '',
-    dateFin: '',
+    dateDebut: weekDates.start,
+    dateFin: weekDates.end,
     projetId: '',
     format: 'json'
   });
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onGenerateReport(params);
+    onGenerateReport({
+      ...params,
+      dateDebut: weekDates.start,
+      dateFin: weekDates.end
+    });
   };
   
-  // Calculate some stats for the info box
+  // Calculate stats for the info box
   const totalHours = useMemo(() => {
     if (!dashboardData) return 0;
     return Object.values(dashboardData.charge_par_employe || {}).reduce((sum, hours) => sum + hours, 0);
@@ -558,54 +1150,84 @@ const ReportingTab: React.FC<{
     return Object.keys(dashboardData.charge_par_employe || {}).length;
   }, [dashboardData]);
   
+  // Calculate project-specific stats if a project is selected
+  const selectedProjectStats = useMemo(() => {
+    if (!params.projetId || !dashboardData) return null;
+    
+    const selectedProject = projects.find(p => p.id.toString() === params.projetId);
+    if (!selectedProject) return null;
+    
+    const projectData = dashboardData.charge_par_projet?.[selectedProject.nom];
+    if (!projectData) return null;
+    
+    const projectHours = projectData.heures;
+    const projectValue = projectData.valeur;
+    const projectPercentage = totalHours > 0 ? (projectHours / totalHours * 100) : 0;
+    const efficiency = projectHours > 0 ? (projectValue / projectHours) : 0;
+    
+    return {
+      name: selectedProject.nom,
+      hours: projectHours,
+      value: projectValue,
+      percentage: projectPercentage,
+      efficiency: efficiency
+    };
+  }, [params.projetId, dashboardData, projects, totalHours]);
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-3">
         <FileText className="w-8 h-8 text-amber-600" />
-        <h2 className="text-2xl font-bold text-gray-800">Génération de rapports</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Génération de rapports unifiés</h2>
       </div>
       
       {/* Statistics overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
-          <div className="text-sm text-blue-700 mb-1">Total heures</div>
-          <div className="text-2xl font-bold text-blue-800">{totalHours.toFixed(1)}h</div>
+      {selectedProjectStats ? (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+            <div className="text-sm text-blue-700 mb-1">Heures projet</div>
+            <div className="text-2xl font-bold text-blue-800">{selectedProjectStats.hours.toFixed(1)}h</div>
+          </div>
+          <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
+            <div className="text-sm text-green-700 mb-1">Valeur générée</div>
+            <div className="text-2xl font-bold text-green-800">€{selectedProjectStats.value.toFixed(0)}</div>
+          </div>
+          <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+            <div className="text-sm text-purple-700 mb-1">% du total</div>
+            <div className="text-2xl font-bold text-purple-800">{selectedProjectStats.percentage.toFixed(1)}%</div>
+          </div>
+          <div className="bg-gradient-to-r from-orange-50 to-orange-100 p-4 rounded-lg border border-orange-200">
+            <div className="text-sm text-orange-700 mb-1">Efficacité</div>
+            <div className="text-2xl font-bold text-orange-800">€{selectedProjectStats.efficiency.toFixed(1)}/h</div>
+          </div>
         </div>
-        <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
-          <div className="text-sm text-green-700 mb-1">Projets actifs</div>
-          <div className="text-2xl font-bold text-green-800">{totalProjects}</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+            <div className="text-sm text-blue-700 mb-1">Total heures</div>
+            <div className="text-2xl font-bold text-blue-800">{totalHours.toFixed(1)}h</div>
+          </div>
+          <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
+            <div className="text-sm text-green-700 mb-1">Projets actifs</div>
+            <div className="text-2xl font-bold text-green-800">{totalProjects}</div>
+          </div>
+          <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+            <div className="text-sm text-purple-700 mb-1">Employés</div>
+            <div className="text-2xl font-bold text-purple-800">{totalEmployees}</div>
+          </div>
         </div>
-        <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
-          <div className="text-sm text-purple-700 mb-1">Employés</div>
-          <div className="text-2xl font-bold text-purple-800">{totalEmployees}</div>
-        </div>
-      </div>
+      )}
       
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Date de début
-              </label>
-              <input
-                type="date"
-                value={params.dateDebut}
-                onChange={(e) => setParams({...params, dateDebut: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Date de fin
-              </label>
-              <input
-                type="date"
-                value={params.dateFin}
-                onChange={(e) => setParams({...params, dateFin: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-              />
-            </div>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <h4 className="font-semibold text-amber-800 mb-2 flex items-center">
+              <Calendar className="w-4 h-4 mr-2" />
+              Période du rapport : Semaine courante
+            </h4>
+            <p className="text-sm text-amber-700">
+              Du {new Date(weekDates.start).toLocaleDateString('fr-FR')} au {new Date(weekDates.end).toLocaleDateString('fr-FR')}
+            </p>
           </div>
           
           <div>
@@ -633,27 +1255,34 @@ const ReportingTab: React.FC<{
               onChange={(e) => setParams({...params, format: e.target.value})}
               className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
             >
-              <option value="json">JSON</option>
-              <option value="csv">CSV</option>
-              <option value="pdf">PDF</option>
-              <option value="detailed">Rapport détaillé par employé</option>
-              <option value="summary">Rapport de synthèse global</option>
+              <option value="json">JSON Unifié</option>
+              <option value="csv">CSV Unifié</option>
+              <option value="pdf">PDF Unifié</option>
             </select>
           </div>
           
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <h4 className="font-semibold text-amber-800 mb-2 flex items-center">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h4 className="font-semibold text-green-800 mb-2 flex items-center">
               <Download className="w-4 h-4 mr-2" />
-              Types de rapports disponibles :
+              Rapports unifiés - Toutes les données incluses :
             </h4>
-            <ul className="text-sm text-amber-700 space-y-1">
-              <li><strong>JSON :</strong> Données structurées pour analyse programmatique</li>
-              <li><strong>CSV :</strong> Tableau de données pour Excel/Sheets</li>
-              <li><strong>PDF :</strong> Rapport simple imprimable</li>
-              <li><strong>Rapport détaillé :</strong> Analyse complète avec graphiques par employé</li>
-              <li><strong>Rapport de synthèse :</strong> Vue d'ensemble globale avec indicateurs</li>
+            <ul className="text-sm text-green-700 space-y-1">
+              <li><strong>JSON Unifié :</strong> Toutes les données avec métadonnées, résumé et analyses complètes</li>
+              <li><strong>CSV Unifié :</strong> Toutes les sections (projets, employés, catégories) dans un seul fichier</li>
+              <li><strong>PDF Unifié :</strong> Rapport complet avec métriques, graphiques et recommandations</li>
             </ul>
           </div>
+          
+          {params.projetId && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-semibold text-blue-800 mb-2">
+                📊 Rapport focalisé sur le projet sélectionné
+              </h4>
+              <p className="text-sm text-blue-700">
+                Le rapport contiendra toutes les informations mais avec un focus sur le projet "{projects.find(p => p.id.toString() === params.projetId)?.nom}".
+              </p>
+            </div>
+          )}
           
           <div className="flex justify-end">
             <button
@@ -662,7 +1291,7 @@ const ReportingTab: React.FC<{
               className="bg-amber-600 text-white px-6 py-2 rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
             >
               {loading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>}
-              <span>{loading ? 'Génération...' : 'Générer le rapport'}</span>
+              <span>{loading ? 'Génération...' : 'Générer le rapport unifié'}</span>
             </button>
           </div>
         </form>
@@ -717,7 +1346,7 @@ const ManagerDashboard: React.FC = () => {
     setLoading(prev => ({...prev, validation: true}));
     try {
       await validateWeek(id, action, comment);
-      await loadDashboardData(); // Refresh data
+      await loadDashboardData();
       setError(null);
     } catch (err) {
       console.error('Erreur:', err);
@@ -736,62 +1365,52 @@ const ManagerDashboard: React.FC = () => {
     setLoading(prev => ({...prev, reporting: true}));
     try {
       const timestamp = new Date().toISOString().split('T')[0];
-      const projectName = params.projetId ? 
-        projects.find(p => p.id.toString() === params.projetId)?.nom || 'Projet' : 
-        'Tous_Projets';
+      const selectedProject = params.projetId ? projects.find(p => p.id.toString() === params.projetId) : null;
+      const projectName = selectedProject?.nom || 'Tous_Projets';
+      const isProjectSpecific = !!params.projetId;
       
-      // Filter data based on project selection if needed
-      let filteredData = dashboardData;
-      if (params.projetId) {
-        // Filter the data to only include the selected project
-        const selectedProject = projects.find(p => p.id.toString() === params.projetId);
-        if (selectedProject) {
+      // Prepare filtered data based on project selection
+      let filteredData = { ...dashboardData };
+      
+      if (isProjectSpecific && selectedProject) {
+        const projectData = dashboardData.charge_par_projet?.[selectedProject.nom];
+        
+        if (projectData) {
           filteredData = {
             ...dashboardData,
-            charge_par_projet: Object.fromEntries(
-              Object.entries(dashboardData.charge_par_projet || {})
-                .filter(([projet]) => projet === selectedProject.nom)
-            )
+            charge_par_projet: {
+              [selectedProject.nom]: projectData
+            }
           };
         }
       }
       
       switch (params.format) {
         case 'json':
-          generateJSONReport(
+          generateUnifiedJSONReport(
             filteredData,
-            `rapport_${projectName}_${timestamp}.json`
+            `rapport_unifie_${projectName}_${timestamp}.json`,
+            isProjectSpecific,
+            selectedProject?.nom
           );
           break;
           
         case 'csv':
-          generateCSVReport(
+          generateUnifiedCSVReport(
             filteredData,
-            `rapport_${projectName}_${timestamp}.csv`
+            `rapport_unifie_${projectName}_${timestamp}.csv`,
+            isProjectSpecific,
+            selectedProject?.nom
           );
           break;
           
         case 'pdf':
-          await generatePDFReport(
+          await generateUnifiedPDFReport(
             filteredData,
-            `rapport_${projectName}_${timestamp}.pdf`
+            `rapport_unifie_${projectName}_${timestamp}.pdf`,
+            isProjectSpecific,
+            selectedProject?.nom
           );
-          break;
-          
-        case 'detailed':
-          await generateDetailedEmployeeReport({
-            dashboardData: filteredData,
-            projects,
-            params
-          });
-          break;
-          
-        case 'summary':
-          await generateGlobalSummaryReport({
-            dashboardData: filteredData,
-            projects,
-            params
-          });
           break;
           
         default:
