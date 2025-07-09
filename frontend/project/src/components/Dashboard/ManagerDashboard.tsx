@@ -100,66 +100,41 @@ const generateUnifiedJSONReport = (data: any, filename: string, isProjectSpecifi
   URL.revokeObjectURL(url);
 };
 
-const generateUnifiedCSVReport = (data: any, filename: string, isProjectSpecific: boolean = false, projectName?: string) => {
-  let csvContent = 'Section,Type,Nom,Heures,Valeur,Pourcentage,Statut\n';
-  
-  // Métadonnées
-  csvContent += `Métadonnées,Rapport,${isProjectSpecific ? 'Spécifique au projet' : 'Global'},,,,\n`;
-  csvContent += `Métadonnées,Projet,${isProjectSpecific ? projectName : 'Tous les projets'},,,,\n`;
-  csvContent += `Métadonnées,Période,Semaine courante,,,,\n`;
-  csvContent += `Métadonnées,Généré le,${new Date().toLocaleString('fr-FR')},,,,\n`;
-  csvContent += '\n';
-  
-  // Résumé
-  const totalHours = Object.values(data.charge_par_employe || {}).reduce((sum: number, h: any) => sum + h, 0);
-  const totalProjects = Object.keys(data.charge_par_projet || {}).length;
-  const totalEmployees = Object.keys(data.charge_par_employe || {}).length;
-  const productiveHours = Object.values(data.charge_par_categorie || {})
-    .filter((cat: any) => cat.label === 'Projets')
-    .reduce((sum: number, cat: any) => sum + cat.heures, 0);
-  const productivityRate = totalHours > 0 ? (productiveHours / totalHours * 100) : 0;
-  
-  csvContent += `Résumé,Total heures,,${totalHours.toFixed(1)},,${productivityRate.toFixed(1)}%,\n`;
-  csvContent += `Résumé,Total projets,,${totalProjects},,,,\n`;
-  csvContent += `Résumé,Total employés,,${totalEmployees},,,,\n`;
-  csvContent += `Résumé,Heures productives,,${productiveHours.toFixed(1)},,${productivityRate.toFixed(1)}%,\n`;
-  csvContent += `Résumé,Semaines à valider,,${data.semaines_a_valider?.length || 0},,,,\n`;
-  csvContent += '\n';
-  
-  // Données des projets
-  const totalProjectHours = Object.values(data.charge_par_projet || {}).reduce((sum: number, p: any) => sum + p.heures, 0);
-  Object.entries(data.charge_par_projet || {}).forEach(([projet, info]: [string, any]) => {
-    const percentage = totalProjectHours > 0 ? ((info.heures / totalProjectHours) * 100).toFixed(1) : '0.0';
-    csvContent += `Projets,Projet,"${projet}",${info.heures.toFixed(1)},${info.valeur.toFixed(2)},${percentage}%,\n`;
-  });
-  csvContent += '\n';
-  
-  // Données des employés
-  const totalEmployeeHours = Object.values(data.charge_par_employe || {}).reduce((sum: number, h: any) => sum + h, 0);
-  const avgHoursPerEmployee = totalEmployees > 0 ? totalEmployeeHours / totalEmployees : 0;
-  Object.entries(data.charge_par_employe || {}).forEach(([employe, heures]: [string, any]) => {
-    const percentage = totalEmployeeHours > 0 ? ((heures / totalEmployeeHours) * 100).toFixed(1) : '0.0';
-    const performance = heures >= avgHoursPerEmployee ? 'Au-dessus' : 'En-dessous';
-    csvContent += `Employés,Employé,"${employe}",${heures.toFixed(1)},0,${percentage}%,${performance}\n`;
-  });
-  csvContent += '\n';
-  
-  // Données des catégories
-  const totalCategoryHours = Object.values(data.charge_par_categorie || {}).reduce((sum: number, c: any) => sum + c.heures, 0);
-  Object.entries(data.charge_par_categorie || {}).forEach(([key, cat]: [string, any]) => {
-    const percentage = totalCategoryHours > 0 ? ((cat.heures / totalCategoryHours) * 100).toFixed(1) : '0.0';
-    csvContent += `Catégories,Catégorie,"${cat.label}",${cat.heures.toFixed(1)},0,${percentage}%,\n`;
-  });
-  
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
+type ReportDataCSV = {
+  charge_par_projet:   Record<string, ProjectInfo>;
+  charge_par_employe:  Record<string, number>;
+  charge_par_categorie:Record<string, CategoryInfo>;
+};
+const generateUnifiedCSVReport = (data: any, filename: string): void => {
+  /* --- petite fonction d’échappement CSV --------------------- */
+  const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+
+  let csv = 'Type,Projet,Employe,Heures\r\n';
+
+  /* 1.  Projets  – une ligne par (projet, employé) ------------ */
+  Object.entries(data.charge_par_projet || {}).forEach(
+    ([projet, { heures }]: [string, any]) => {
+      Object.keys(data.charge_par_employe || {}).forEach(emp => {
+        csv += `Projet,${esc(projet)},${esc(emp)},${heures}\r\n`;
+      });
+    }
+  );
+
+  /* 2.  Catégories  – une ligne par (catégorie ≠ “Projets”, employé) */
+  Object.values(data.charge_par_categorie || {})
+    .filter((cat: any) => cat.label !== 'Projets')
+    .forEach((cat: any) => {
+      Object.keys(data.charge_par_employe || {}).forEach(emp => {
+        csv += `${esc(cat.label)},-\,${esc(emp)},${cat.heures}\r\n`;
+      });
+    });
+
+  /* 3.  Téléchargement ---------------------------------------- */
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'), { href: url, download: filename }).click();
   URL.revokeObjectURL(url);
 };
-
 interface ProjectInfo {
   heures: number;
   valeur: number;
@@ -240,79 +215,83 @@ const generateUnifiedPDFReport = async (
   };
 
   // Fonction pour générer un diagramme circulaire avec taille réduite
-  const generatePieChart = (
+ const generatePieChart = (
   data: { label: string; value: number }[],
   title: string
 ): string => {
-  /* --- paramètres de base ------------------------------------------- */
-  const radius         = 30;  // rayon du camembert (mm)
-  const legendFontSize = 3;   // pt : petit mais lisible
-  const maxChars       = 18;  // troncature des libellés
-  const legendGap      = 10;  // espace entre camembert et légende (mm)
 
-  /* --- préparation des libellés complets ---------------------------- */
-  const total          = data.reduce((s, d) => s + d.value, 0);
-  const legendStrings  = data.map(item => {
-    const lbl = item.label.length > maxChars
-      ? item.label.slice(0, maxChars - 1) + '…'
-      : item.label;
-    const pct = total ? ((item.value / total) * 100).toFixed(1) : '0';
-    return `${lbl} (${pct}%)`;
+  /* -- Réglages côté “look” ---------------------------------------- */
+  const radius         = 30;   // mm
+  const titleFontSize  = 6;    // pt
+  const legendFontSize = 3;    // pt  (identique pour TOUTES les lignes)
+  const legendGap      = 12;   // mm entre disque et légende
+  const maxChars       = 40;   // on coupe vraiment au delà de 40 car.
+
+  /* -- Chaînes de légende (libellé + pourcentage) ------------------ */
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const legendStrings = data.map(({ label, value }) => {
+    const clean = label.length > maxChars
+      ? label.slice(0, maxChars - 1) + '…'
+      : label;
+    const pct   = total ? ((value / total) * 100).toFixed(1) : '0';
+    return `${clean} (${pct} %)`;
   });
 
-  /* --- largeur minimale de légende ---------------------------------- */
-  // ≈ 0,6 mm par caractère pour une police 3 pt
-  const longest       = Math.max(...legendStrings.map(s => s.length));
-  const legendWidth   = longest * legendFontSize * 0.6 + 16; // 16 mm = carré couleur + marge
-  const width         = radius * 2 + legendGap + legendWidth;
-  const height        = Math.max(radius * 2 + 20, data.length * 10); // 10 mm/ligne légende
-  const center        = { x: radius + 5, y: height / 2 };            // marge gauche 5 mm
+  /* -- Largeur minimale pour la légende ---------------------------- */
+  // 0,8 mm ≃ largeur d’un caractère Helvetica 3 pt
+  const longest     = Math.max(...legendStrings.map(s => s.length));
+  const legendWidth = longest * legendFontSize * 0.8 + 18;  // 18 mm = carré + marge
+  const width       = radius * 2 + legendGap + legendWidth;
+  const height      = Math.max(radius * 2 + 22, legendStrings.length * 10);
+  const center      = { x: radius + 5, y: height / 2 };      // 5 mm de marge à gauche
 
-  /* --- construction du SVG ------------------------------------------ */
-  let cumulativeAngle = 0;
+  /* -- Construction du SVG ---------------------------------------- */
+  let cumAngle = 0;
   return `
-    <svg width="${width}" height="${height}"
-         viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="100%" height="100%" fill="#ffffff" rx="4" ry="4" />
+<svg width="${width}" height="${height}"
+     viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
 
-      <!-- Titre -->
-      <text x="${width / 2}" y="8" text-anchor="middle"
-            font-size="5" font-weight="bold">${title}</text>
+  <!-- Fond -->
+  <rect width="100%" height="100%" fill="#ffffff" rx="4" ry="4"/>
 
-      <!-- Parts du camembert -->
-      ${data.map((item, i) => {
-        const angle = (item.value / total) * 360;
-        const start = cumulativeAngle;
-        cumulativeAngle += angle;
-        const large = angle > 180 ? 1 : 0;
+  <!-- Titre -->
+  <text x="${width / 2}" y="9" text-anchor="middle"
+        font-family="Helvetica,Arial" font-weight="bold"
+        font-size="${titleFontSize}pt">${title}</text>
 
-        const x2 = center.x + radius * Math.cos(start * Math.PI / 180);
-        const y2 = center.y + radius * Math.sin(start * Math.PI / 180);
-        const x3 = center.x + radius * Math.cos((start + angle) * Math.PI / 180);
-        const y3 = center.y + radius * Math.sin((start + angle) * Math.PI / 180);
+  <!-- Parts -->
+  ${data.map(({ value }, i) => {
+      const angle = (value / total) * 360;
+      const start = cumAngle; cumAngle += angle;
+      const large = angle > 180 ? 1 : 0;
+      const x1 = center.x;
+      const y1 = center.y;
+      const x2 = x1 + radius * Math.cos(start * Math.PI / 180);
+      const y2 = y1 + radius * Math.sin(start * Math.PI / 180);
+      const x3 = x1 + radius * Math.cos((start + angle) * Math.PI / 180);
+      const y3 = y1 + radius * Math.sin((start + angle) * Math.PI / 180);
+      return `
+        <path d="M${x1},${y1} L${x2},${y2}
+                 A${radius},${radius} 0 ${large} 1 ${x3},${y3} Z"
+              fill="${CHART_COLORS[i % CHART_COLORS.length]}"
+              stroke="#ffffff" stroke-width="1"/>`;
+    }).join('')}
 
-        return `
-          <path d="M${center.x},${center.y} L${x2},${y2}
-                   A${radius},${radius} 0 ${large} 1 ${x3},${y3} Z"
-                fill="${CHART_COLORS[i % CHART_COLORS.length]}"
-                stroke="#ffffff" stroke-width="1" />
-        `;
-      }).join('')}
+  <!-- Légende -->
+  ${legendStrings.map((txt, i) => {
+      const lx = radius * 2 + legendGap;
+      const ly = 22 + i * 10;                     // 10 mm par ligne
+      return `
+        <rect x="${lx}" y="${ly - 4}" width="8" height="8"
+              fill="${CHART_COLORS[i % CHART_COLORS.length]}"/>
+        <text x="${lx + 11}" y="${ly + 1}"
+              font-family="Helvetica,Arial"
+              font-size="${legendFontSize}pt"
+              font-weight="normal"
+              text-anchor="start">${txt}</text>`;
+    }).join('')}
 
-      <!-- Légende -->
-      ${legendStrings.map((txt, i) => {
-        const lx = radius * 2 + legendGap;
-        const ly = 20 + i * 10;
-        return `
-          <rect x="${lx}" y="${ly - 4}" width="8" height="8"
-                fill="${CHART_COLORS[i % CHART_COLORS.length]}" />
-          <text x="${lx + 10}" y="${ly + 1}" font-size="${legendFontSize}">
-            ${txt}
-          </text>
-        `;
-      }).join('')}
-    </svg>
-  `;
+</svg>`;
 };
 
   // Fonction pour ajouter un SVG au PDF
@@ -614,7 +593,7 @@ const generateUnifiedPDFReport = async (
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
       .map(([employe, heures]) => ({
-        label: employe.substring(0, 12),
+        label: employe,
         value: heures
       }));
     
@@ -673,36 +652,67 @@ const generateUnifiedPDFReport = async (
   pdf.setTextColor(255, 255, 255);
   pdf.setFontSize(14);
   pdf.text('RÉPARTITION PAR CATÉGORIE', 15, 12);
-  
-  pdf.setTextColor(0, 0, 0);
-  yPosition = 30;
 
-  if (Object.keys(data.charge_par_categorie).length > 0) {
-    const categoriesData = Object.values(data.charge_par_categorie)
-      .map(cat => ({
-        label: cat.label,
-        value: cat.heures
-      }));
-    
-    const pieChartSVG = generatePieChart(categoriesData, 'Heures par catégorie');
-    await addSVGToPDF(pieChartSVG, 20, yPosition, 100, 80);  // Taille réduite
-  }
+pdf.setTextColor(0, 0, 0);
+yPosition = 30;
 
-  // Pied de page
-  pdf.setFillColor(243, 244, 246);
-  pdf.rect(0, pageHeight - 15, pageWidth, 15, 'F');
-  
-  pdf.setTextColor(100, 100, 100);
-  pdf.setFontSize(10);
-  pdf.setFont('helvetica', 'italic');
+if (Object.keys(data.charge_par_categorie).length > 0) {
+
+  /* 1) Prépare les données pour le camembert */
+  const categoriesData = Object.values(data.charge_par_categorie)
+    .map(cat => ({ label: cat.label, value: cat.heures }));
+
+  const pieChartSVG = generatePieChart(categoriesData, 'Heures par catégorie');
+  await addSVGToPDF(pieChartSVG, 20, yPosition, 100, 80);   // camembert 100 × 80 mm
+  yPosition += 90;                                          // laisse 10 mm de marge
+
+  /* 2) ---- Mini-analyse ------------------------------------------------ */
+  const totalCatHours = categoriesData.reduce((s, c) => s + c.value, 0);
+  const topCat        = categoriesData
+                          .slice()                 // copie pour ne pas modifier l’ordre
+                          .sort((a, b) => b.value - a.value)[0];
+
+  // % cumulé des 3 premières catégories (utile quand il y en a beaucoup)
+  const top3Share = categoriesData
+                      .sort((a, b) => b.value - a.value)
+                      .slice(0, 3)
+                      .reduce((s, c) => s + c.value, 0);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  pdf.setTextColor(80, 80, 80);
+
   pdf.text(
-    `Rapport généré le ${format(now, 'dd/MM/yyyy à HH:mm', { locale: fr })}`,
-    pageWidth / 2,
-    pageHeight - 10,
-    { align: 'center' }
+    `• Catégorie dominante : “${topCat.label}” avec ${topCat.value.toFixed(1)} h ` +
+    `(${((topCat.value / totalCatHours) * 100).toFixed(1)} % du total).`,
+    15, yPosition
   );
-  
-  pdf.save(filename);
+  yPosition += 5;
+
+  pdf.text(
+    `• Les trois premières catégories représentent ` +
+    `${((top3Share / totalCatHours) * 100).toFixed(1)} % du temps global.`,
+    15, yPosition
+  );
+  yPosition += 10;
+}
+
+/* ---------- PIED DE PAGE ---------------------------------------- */
+pdf.setFillColor(243, 244, 246);
+pdf.rect(0, pageHeight - 15, pageWidth, 15, 'F');
+
+pdf.setTextColor(100, 100, 100);
+pdf.setFontSize(10);
+pdf.setFont('helvetica', 'italic');
+pdf.text(
+  `Rapport généré le ${format(now, 'dd/MM/yyyy à HH:mm', { locale: fr })}`,
+  pageWidth / 2,
+  pageHeight - 10,
+  { align: 'center' }
+);
+
+pdf.save(filename);
+
 };
 
 class ErrorBoundary extends React.Component<
@@ -1399,8 +1409,7 @@ const ManagerDashboard: React.FC = () => {
           generateUnifiedCSVReport(
             filteredData,
             `rapport_unifie_${projectName}_${timestamp}.csv`,
-            isProjectSpecific,
-            selectedProject?.nom
+            
           );
           break;
           
