@@ -1240,21 +1240,7 @@ const ReportingTab: React.FC<{
             </p>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Projet
-            </label>
-            <select
-              value={params.projetId}
-              onChange={(e) => setParams({...params, projetId: e.target.value})}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-            >
-              <option value="">Tous les projets</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.nom}</option>
-              ))}
-            </select>
-          </div>
+          
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
