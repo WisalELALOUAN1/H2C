@@ -22,6 +22,8 @@ from django.db.models import Sum
 from django.http import HttpResponse
 import csv,io
 from reportlab.pdfgen import canvas
+import logging
+logger = logging.getLogger(__name__)
 class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjetSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -94,10 +96,73 @@ class ManagerImputationViewSet(viewsets.ModelViewSet):
             charge_par_projet[imputation.projet.nom] += float(imputation.heures)
         
         serializer = SemaineImputationSerializer(semaines_a_valider, many=True)
+        data = serializer.data
+        for idx, semaine_obj in enumerate(semaines_a_valider):
+            data[idx]['employe_id']  = semaine_obj.employe.id
+            data[idx]['employe_nom'] = f"{semaine_obj.employe.prenom} {semaine_obj.employe.nom}"
+            print("-----------data__---",data)
         return Response({
-            'semaines': serializer.data,
+            'semaines': data,
             'charge_par_projet': charge_par_projet,
         })
+    @action(detail=False, methods=['get'], url_path='employe/(?P<employee_id>\d+)/semaine/(?P<year>\d+)/(?P<week>\d+)/entries')
+    def employee_week_entries(self, request, employee_id=None, year=None, week=None):
+        """
+        Récupère les imputations d'un employé pour une semaine spécifique
+        """
+        try:
+            # Conversion des paramètres
+            employee_id = int(employee_id)
+            year = int(year)
+            week = int(week)
+            
+            # Vérification que l'employé appartient aux équipes du manager
+            if not Equipe.objects.filter(
+                manager=request.user,
+                membres__id=employee_id
+            ).exists():
+                return Response(
+                    {"detail": "Accès non autorisé à cet employé"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Calcul des dates ISO
+            try:
+                start_date = date.fromisocalendar(year, week, 1)
+                end_date = start_date + timedelta(days=6)
+            except ValueError as e:
+                return Response(
+                    {"error": f"Semaine invalide: {str(e)}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Récupération des imputations
+            imputations = ImputationHoraire.objects.filter(
+                employe_id=employee_id,
+                date__range=(start_date, end_date)
+            ).select_related("projet", "formation")
+
+            # Sérialisation
+            serializer = ImputationHoraireSerializer(imputations, many=True)
+            total_heures = imputations.aggregate(total=Sum('heures'))['total'] or 0
+
+            return Response({
+                "success": True,
+                "employee_id": employee_id,
+                "year": year,
+                "week": week,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "imputations": serializer.data,
+                "total_heures": float(total_heures)
+            })
+
+        except Exception as e:
+            logger.error(f"Erreur dans employee_week_entries: {str(e)}", exc_info=True)
+            return Response(
+                {"error": "Une erreur interne est survenue"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 class ManagerSubmittedImputationsView(APIView):
    
 

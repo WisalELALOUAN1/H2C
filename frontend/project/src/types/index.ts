@@ -228,7 +228,7 @@ export interface ReportParams {
   dateFin?: string;
   projetId?: string;
   employeId?: string;
-  categorie?: 'projet' | 'formation' | 'absence' | 'autre';
+  categorie?: 'projet' | 'formation' | 'absence' | 'autre' |'reunion' | 'admin';
   format?: 'json' | 'csv' | 'pdf';
 }
 

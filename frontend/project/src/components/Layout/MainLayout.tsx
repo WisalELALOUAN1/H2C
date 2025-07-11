@@ -12,8 +12,7 @@ import GlobalRulesConfig from '../Admin/GlobalRulesConfig';
 import TeamsCreation from '../Admin/TeamsCreation.tsx';
 import TeamManagement from '../Manager/TeamManagement.tsx';
 import ProjectsManagement from '../Manager/ProjectsManagement.tsx';
-import TasksManagement from '../Employe/TasksManagement.tsx';
-import TimesheetManagement from '../Employe/TimesheetManagement.tsx';
+
 import EmployeeAbsenceDashboard from '../Employe/EmployeeAbsenceDashboard';
 import SettingsView from '../Shared/SettingsView.tsx';
 import ManagerPendingRequests from '../Manager/ManagerPendingRequests.tsx';
@@ -88,8 +87,7 @@ const MainLayout: React.FC = () => {
       case 'employe':
       case 'employee':
         switch (activeSection) {
-          case 'tasks':
-            return <TasksManagement />;
+          
           
           case 'calendar':
             return <CalendarView />;

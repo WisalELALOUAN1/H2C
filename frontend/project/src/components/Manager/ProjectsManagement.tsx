@@ -329,7 +329,7 @@ const ProjectsManagement: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <label htmlFor="taux_horaire" className="block text-sm font-medium text-stone-700 mb-1">
-                                        Taux horaire (€) <span className="text-amber-600">*</span>
+                                        Coût horaire (€) <span className="text-amber-600">*</span>
                                     </label>
                                     <input
                                         type="number"

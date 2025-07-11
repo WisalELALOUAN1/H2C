@@ -1001,15 +1001,24 @@ export const getManagerDashboard = async (): Promise<ManagerDashboardData> => {
       `${API_BASE_URL}/gestion-imputations-projet/manager/dashboard/`,
       { headers: getAuthHeaders() }
     );
+    console.log('[getManagerDashboard] Data:', data);
+
+    // On renomme chaque semaine.employe → semaine.employe_id
+    const semainesAvecEmployeeId = (data.semaines_a_valider ?? []).map((s: any) => ({
+      ...s,
+      employe_id: s.employe,
+      // conserve aussi employe_nom si besoin
+      employe_nom: s.employe_nom,
+    }));
 
     return {
-      semaines_a_valider: data.semaines_a_valider ?? [],
-      charge_par_projet: data.charge_par_projet ?? {},
-      charge_par_categorie: data.charge_par_categorie ?? {},
-      charge_par_employe: data.charge_par_employe ?? {},
-      projets_en_retard: data.projets_en_retard ?? 0,
-      periode: data.periode ?? '',
-      equipes: data.equipes ?? []
+      semaines_a_valider: semainesAvecEmployeeId,
+      charge_par_projet:     data.charge_par_projet     ?? {},
+      charge_par_categorie:  data.charge_par_categorie  ?? {},
+      charge_par_employe:    data.charge_par_employe    ?? {},
+      projets_en_retard:     data.projets_en_retard     ?? 0,
+      periode:               data.periode               ?? '',
+      equipes:               data.equipes               ?? []
     };
   } catch (err) {
     console.error('[getManagerDashboard]', err);
@@ -1575,9 +1584,41 @@ export const getManagerProjects = async (): Promise<LightProject[]> => {
       `${API_BASE_URL}/gestion-imputations-projet/manager/dashboard/projets/`,
       { headers: getAuthHeaders() }
     );
-    return response.data; // [{id, nom}, ...]
+    return response.data; 
   } catch (error) {
     console.error('Error fetching manager projects:', error);
     throw new Error('Erreur lors de la récupération des projets');
+  }
+};
+export const fetchManagerWeekEntries = async (
+  employeeId: number,
+  year: number,
+  weekNumber: number
+): Promise<{
+  start_date: string;
+  end_date: string;
+  imputations: ImputationHoraire[];
+  total_heures: number;
+} | null> => {  // Changed from undefined to null
+  try {
+    const response = await api.get(
+      `/gestion-imputations-projet/manager/imputations/employe/${employeeId}/semaine/${year}/${weekNumber}/entries/`,
+      { headers: getAuthHeaders() }
+    );
+    console.log('Response from fetchManagerWeekEntries:', response.data);
+    if (!response.data?.success) {
+      throw new Error(response.data?.error || "Réponse API invalide");
+    }
+
+    return {
+      start_date: response.data.start_date,
+      end_date: response.data.end_date,
+      imputations: response.data.imputations,
+      total_heures: response.data.total_heures,
+    };
+    
+  } catch (error) {
+    console.error('Erreur fetchManagerWeekEntries:', error);
+    return null;  
   }
 };

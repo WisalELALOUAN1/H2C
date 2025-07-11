@@ -80,7 +80,7 @@ class EquipeMembresListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Récupérer seulement les équipes dont l'utilisateur est manager
+        # Recuperer seulement les equipes dont l'utilisateur est manager
         return Equipe.objects.filter(manager=self.request.user).prefetch_related('membres')
 
     def list(self, request, *args, **kwargs):

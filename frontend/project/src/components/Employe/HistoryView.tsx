@@ -1125,7 +1125,9 @@ const HistoryView: React.FC = () => {
   const handleExportPDF = async () => {
     setExporting(true);
     try {
+
       const pdfData = generatePDFData();
+      console.log('PDF Data:', pdfData);
       await generatePDFReport(pdfData);
     } catch (err) {
       console.error('Erreur lors de l\'export PDF:', err);
@@ -1136,78 +1138,96 @@ const HistoryView: React.FC = () => {
   };
 
   const generatePDFData = () => {
-    const weekStart = currentWeek[0];
-    const weekEnd = currentWeek[currentWeek.length - 1];
-    const weekDates = `${format(weekStart, 'dd/MM', { locale: fr })} au ${format(weekEnd, 'dd/MM/yyyy', { locale: fr })}`;
+  const weekStart = currentWeek[0];
+  const weekEnd = currentWeek[currentWeek.length - 1];
+  const weekDates = `${format(weekStart, 'dd/MM', { locale: fr })} au ${format(weekEnd, 'dd/MM/yyyy', { locale: fr })}`;
 
-    // Calculate daily hours
-    const dailyHours: { [date: string]: number } = {};
-    currentWeek.forEach(day => {
-      if (isWorkingDay(day)) {
-        const dateKey = format(day, "yyyy-MM-dd");
-        dailyHours[dateKey] = calculateDayTotal(day);
-      }
-    });
-
-    // Calculate project distribution
-    const projectDistribution: { [project: string]: number } = {};
-    Object.values(activities).flat().forEach(activity => {
-      if (activity.categorie === 'projet' && activity.projet) {
-        const projectName = activity.projet.nom;
-        projectDistribution[projectName] = (projectDistribution[projectName] || 0) + (activity.heures || 0);
-      }
-    });
-
-    // Calculate category distribution
-    const categoryDistribution: { [category: string]: number } = {};
-    Object.values(activities).flat().forEach(activity => {
-      const categoryLabel = activityTypes.find(t => t.id === activity.categorie)?.label || activity.categorie;
-      categoryDistribution[categoryLabel] = (categoryDistribution[categoryLabel] || 0) + (activity.heures || 0);
-    });
-
-    // Prepare activities data
-    const activitiesData: Array<{
-      date: string;
-      day: string;
-      category: string;
-      projectOrFormation: string;
-      description: string;
-      hours: number;
-    }> = [];
-
-    currentWeek.forEach(day => {
+  // Calculate daily hours
+  const dailyHours: { [date: string]: number } = {};
+  currentWeek.forEach(day => {
+    if (isWorkingDay(day)) {
       const dateKey = format(day, "yyyy-MM-dd");
-      const dayActivities = activities[dateKey] || [];
-      
-      dayActivities.forEach(activity => {
-        const projectOrFormation = activity.categorie === 'projet' 
-          ? (activity.projet?.nom || 'Non spécifié')
-          : activity.categorie === 'formation'
-          ? (activity.formation?.intitule || 'Non spécifié')
-          : activityTypes.find(t => t.id === activity.categorie)?.label || activity.categorie;
+      dailyHours[dateKey] = calculateDayTotal(day);
+    }
+  });
 
-        activitiesData.push({
-          date: dateKey,
-          day: format(day, "EEEE", { locale: fr }),
-          category: activityTypes.find(t => t.id === activity.categorie)?.label || activity.categorie,
-          projectOrFormation,
-          description: activity.description || '',
-          hours: activity.heures || 0
-        });
+  // Calculate project distribution (nombre d’heures par projet)
+  const projectDistribution: { [project: string]: number } = {};
+Object.values(activities).flat().forEach(activity => {
+  if (activity.categorie === 'projet' && activity.projet) {
+    const projectName = activity.projet.nom;
+    // on convertit bien en number pour ne jamais accumuler une string
+    const h = Number(activity.heures) || 0;
+    projectDistribution[projectName] = (projectDistribution[projectName] || 0) + h;
+  }
+});
+// Arrondir à 2 décimales en restant en number
+Object.keys(projectDistribution).forEach(name => {
+  projectDistribution[name] =
+    Math.round(projectDistribution[name] * 100) / 100;
+});
+
+// Calculate category distribution (même logique)
+const categoryDistribution: { [category: string]: number } = {};
+Object.values(activities).flat().forEach(activity => {
+  const label =
+    activityTypes.find(t => t.id === activity.categorie)?.label
+    || activity.categorie;
+  const h = Number(activity.heures) || 0;
+  categoryDistribution[label] = (categoryDistribution[label] || 0) + h;
+});
+Object.keys(categoryDistribution).forEach(cat => {
+  categoryDistribution[cat] =
+    Math.round(categoryDistribution[cat] * 100) / 100;
+});
+
+  // Prepare activities data
+  const activitiesData: Array<{
+    date: string;
+    day: string;
+    category: string;
+    projectOrFormation: string;
+    description: string;
+    hours: number;
+  }> = [];
+
+  currentWeek.forEach(day => {
+    const dateKey = format(day, "yyyy-MM-dd");
+    const dayActivities = activities[dateKey] || [];
+    
+    dayActivities.forEach(activity => {
+      const projectOrFormation =
+        activity.categorie === 'projet'
+          ? (activity.projet?.nom || 'Non spécifié')
+        : activity.categorie === 'formation'
+          ? (activity.formation?.intitule || 'Non spécifié')
+        : activityTypes.find(t => t.id === activity.categorie)?.label
+          || activity.categorie;
+
+      activitiesData.push({
+        date: dateKey,
+        day: format(day, "EEEE", { locale: fr }),
+        category: activityTypes.find(t => t.id === activity.categorie)?.label
+          || activity.categorie,
+        projectOrFormation,
+        description: activity.description || '',
+        hours: activity.heures || 0
       });
     });
+  });
 
-    return {
-      weekDates,
-      totalHours: calculateWeekTotal(),
-      workingDays: currentWeek.filter(day => getDayStatus(day) === "working").length,
-      totalActivities: Object.values(activities).flat().length,
-      dailyHours,
-      projectDistribution,
-      categoryDistribution,
-      activities: activitiesData
-    };
+  return {
+    weekDates,
+    totalHours: calculateWeekTotal(),
+    workingDays: currentWeek.filter(day => getDayStatus(day) === "working").length,
+    totalActivities: Object.values(activities).flat().length,
+    dailyHours,
+    projectDistribution,
+    categoryDistribution,
+    activities: activitiesData
   };
+};
+
 
   // Status display helpers
   const getStatusIcon = (status: WeekStatus['status']) => {

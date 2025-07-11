@@ -560,7 +560,11 @@ const generateDistributionChart = (
   });
 };
 
-export const generatePDFReport = async (data: PDFData): Promise<void> => {
+export const generatePDFReport = async (data: PDFData|null): Promise<void> => {
+   if (!data) {
+    console.error("No data provided for PDF generation");
+    return;
+  }
   try {
     const pdf = new jsPDF({
       orientation: 'p',
