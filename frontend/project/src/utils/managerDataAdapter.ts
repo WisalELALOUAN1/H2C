@@ -22,7 +22,7 @@ interface PDFData {
 }
 
 
-// Fonction pour mapper les catégories d'imputations aux catégories d'affichage
+// Fonction pour mapper les catégories d'imputations 
 const mapCategoryToDisplay = (imputation: ImputationHoraire): string => {
   // Si la catégorie est explicitement définie
   if (imputation.categorie) {
@@ -43,11 +43,11 @@ const mapCategoryToDisplay = (imputation: ImputationHoraire): string => {
       case 'admin':
         return 'Administratif';
       default:
-        return imputation.categorie; // Retourne la catégorie originale si reconnue mais non mappée
+        return imputation.categorie; 
     }
   }
 
-  // Fallback sur type_activité si la catégorie n'est pas définie
+
   if (imputation.type_activite) {
     switch (imputation.type_activite.toLowerCase()) {
       case 'formation':
@@ -58,11 +58,11 @@ const mapCategoryToDisplay = (imputation: ImputationHoraire): string => {
       case 'admin':
       case 'administratif':
         return 'Administratif';
-      // Ajoutez d'autres cas au besoin
+  
     }
   }
 
-  // Fallback final
+
   return 'Autre';
 };
 
@@ -75,7 +75,7 @@ const getProjectOrFormationName = (imputation: ImputationHoraire): string => {
     return imputation.formation.intitule;
   }
   
-  // Pour les autres catégories, utiliser le type d'activité ou la description
+
   if (imputation.type_activite) {
     switch (imputation.type_activite.toLowerCase()) {
       case 'reunion':
@@ -90,7 +90,7 @@ const getProjectOrFormationName = (imputation: ImputationHoraire): string => {
     }
   }
   
-  // Fallback sur la description ou la catégorie
+
   return imputation.description || mapCategoryToDisplay(imputation);
 };
 
@@ -112,7 +112,7 @@ export const transformWeekDataToPDFFormat = (
     ? parseFloat(weekData.total_heures) 
     : weekData.total_heures;
 
-  // 1. Calcul des heures par jour avec validation
+
   const dailyHours: Record<string, number> = {};
   imputations.forEach(imp => {
     const dateStr = imp.date.split('T')[0];
@@ -122,7 +122,7 @@ export const transformWeekDataToPDFFormat = (
     }
   });
 
-  // 2. Répartition par catégorie et projet avec validation
+
   const categoryDistribution: Record<string, number> = {};
   const projectDistribution: Record<string, number> = {};
 
@@ -138,7 +138,7 @@ export const transformWeekDataToPDFFormat = (
     }
   });
 
-  // 3. Formatage des activités avec validation
+
   const activities = imputations.map(imp => {
     const hours = typeof imp.heures === 'string' ? parseFloat(imp.heures) : imp.heures;
     return {

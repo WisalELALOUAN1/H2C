@@ -237,66 +237,13 @@ class ManagerSubmittedImputationsView(APIView):
                 )
 
 
-        fmt = request.query_params.get("format", "json").lower()
-
-        if fmt == "csv":
-            return self._csv_response(flat_imputations_for_export)
-
-        if fmt == "pdf":
-            return self._pdf_response(flat_imputations_for_export)
+        
 
         
         return Response(payload, status=status.HTTP_200_OK)
 
    
-    def _csv_response(self, rows):
-        """Génère un CSV en mémoire et le renvoie."""
-        if not rows:
-            return Response({"detail": "Aucune donnée"}, status=204)
-
-        header = rows[0].keys()
-        buf = io.StringIO()
-        writer = csv.DictWriter(buf, fieldnames=header)
-        writer.writeheader()
-        writer.writerows(rows)
-
-        resp = HttpResponse(buf.getvalue(), content_type="text/csv")
-        resp[
-            "Content-Disposition"
-        ] = f'attachment; filename="imputations_soumis_{date.today()}.csv"'
-        return resp
-
-    def _pdf_response(self, rows):
-        """PDF simple : une ligne = une imputation (à styliser côté front si besoin)."""
-        if not rows:
-            return Response({"detail": "Aucune donnée"}, status=204)
-
-        buf = io.BytesIO()
-        p = canvas.Canvas(buf)
-        y = 800
-        p.setFont("Helvetica", 10)
-
-        for row in rows:
-            line = (
-                f'{row["date"]}  |  {row["employe"]:<25}  |  '
-                f'{row["projet"] or row["formation"] or row["categorie"]:<20}  |  '
-                f'{row["heures"]}h'
-            )
-            p.drawString(40, y, line)
-            y -= 12
-            if y < 40:
-                p.showPage()
-                y = 800
-
-        p.save()
-        pdf = buf.getvalue()
-        buf.close()
-
-        resp = HttpResponse(pdf, content_type="application/pdf")
-        resp[
-            "Content-Disposition"
-        ] = f'attachment; filename="imputations_soumis_{date.today()}.pdf"'
-        return resp
+    
 class FormationViewSet(viewsets.ModelViewSet):
     queryset = Formation.objects.all()
     serializer_class = FormationSerializer
