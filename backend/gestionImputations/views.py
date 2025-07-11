@@ -19,9 +19,7 @@ from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from django.db import IntegrityError
 from gestionUtilisateurs.serializers import UtilisateurSerializer
 from django.db.models import Sum    
-from django.http import HttpResponse
-import csv,io
-from reportlab.pdfgen import canvas
+
 import logging
 logger = logging.getLogger(__name__)
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -330,13 +328,14 @@ class EmployeImputationViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(imputations, many=True)
         return Response({
-            'imputations': serializer.data,
-            'semaine_status': semaine_imputation.statut if semaine_imputation else 'brouillon',
-            'dates_semaine': [
-                (start_date + timedelta(days=i)).isoformat() 
-                for i in range(7)
-            ]
-        })
+        'imputations': serializer.data,
+        'semaine_status': semaine_imputation.statut if semaine_imputation else 'brouillon',
+        'dates_semaine': [
+            (start_date + timedelta(days=i)).isoformat() 
+            for i in range(7)
+        ],
+        'commentaire': semaine_imputation.commentaire if semaine_imputation else ''
+    })
 
     @action(detail=False, methods=['post'])
     def soumettre_semaine(self, request):
@@ -602,6 +601,8 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
         )
 
         return Response(list(projets), status=200)
+    
+    
     @action(detail=True, methods=["post"], url_path="valider-semaine")
     def validate_week(self, request, pk=None):
         week = get_object_or_404(SemaineImputation, pk=pk)
@@ -618,7 +619,8 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
         week.statut         = "valide" if action == "valider" else "rejete"
         week.date_validation = timezone.now()
         week.valide_par     = request.user
-        week.commentaire    = comment if action == "rejeter" else ""
+        print(f"Commentaire: {comment}")
+        week.commentaire    = comment 
         week.save()
 
         # marquer imputations validees
@@ -630,100 +632,10 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
         return Response(SemaineImputationSerializer(week).data)
 
    
-    def reporting(self, request):
-        teams = self._managed_teams(request.user)
-        if not teams.exists():
-            return Response(
-                {"error": "Vous ne gérez aucune équipe"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        project_id   = request.query_params.get("projet_id")
-        start_date_q = request.query_params.get("date_debut")
-        end_date_q   = request.query_params.get("date_fin")
-        fmt          = request.query_params.get("format", "json")
-
-        try:
-            start = parser.parse(start_date_q).date() if start_date_q else None
-            end   = parser.parse(end_date_q).date()   if end_date_q   else None
-        except ValueError:
-            return Response({"error": "Format de date invalide (YYYY-MM-DD)"},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        qs = (
-            ImputationHoraire.objects
-            .filter(employe__equipes_membre__in=teams)
-            .select_related("projet", "employe")
-        )
-        if project_id:
-            qs = qs.filter(projet__id=project_id)
-        if start and end:
-            qs = qs.filter(date__range=[start, end])
-
-        data = [{
-            "date"      : imp.date.isoformat(),
-            "employe"   : f"{imp.employe.prenom} {imp.employe.nom}",
-            "employe_id": imp.employe.id,
-            "projet"    : imp.projet.nom if imp.projet else None,
-            "projet_id" : imp.projet.id  if imp.projet else None,
-            "categorie" : imp.categorie,
-            "heures"    : float(imp.heures),
-            "valeur"    : (float(imp.heures) * float(imp.projet.taux_horaire)
-                           if imp.categorie == "projet" and imp.projet else 0),
-            "valide"    : imp.valide,
-        } for imp in qs]
-
-        if fmt == "csv":
-            return self._csv(data)
-        if fmt == "pdf":
-            return self._pdf(data)
-
-        return Response({
-            "data"   : data,
-            "total"  : len(data),
-            "periode": f"{start} - {end}" if start and end else "Toutes périodes",
-        })
+    
 
     
-    def _csv(self, data):
-        import csv
-        from io import StringIO
-        from django.http import HttpResponse
-
-        buff   = StringIO()
-        writer = csv.DictWriter(buff, fieldnames=data[0].keys())
-        writer.writeheader()
-        writer.writerows(data)
-
-        resp = HttpResponse(buff.getvalue(), content_type="text/csv")
-        resp["Content-Disposition"] = "attachment; filename=rapport_equipe.csv"
-        return resp
-
-    def _pdf(self, data):
-        from io import BytesIO
-        from django.http import HttpResponse
-        from reportlab.pdfgen import canvas
-
-        buff = BytesIO()
-        c    = canvas.Canvas(buff)
-        c.drawString(50, 800, "Rapport d'activité équipe (extrait)")
-
-        y = 780
-        for line in data[:60]:                    
-            txt = f"{line['date']} - {line['employe']} : {line['heures']}h ({line['categorie']})"
-            c.drawString(50, y, txt)
-            y -= 14
-            if y < 50:
-                c.showPage()
-                y = 800
-
-        c.save()
-        pdf = buff.getvalue()
-        buff.close()
-
-        resp = HttpResponse(pdf, content_type="application/pdf")
-        resp["Content-Disposition"] = "attachment; filename=rapport_equipe.pdf"
-        return resp
+    
 class SemaineCouranteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 

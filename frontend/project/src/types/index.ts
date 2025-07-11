@@ -209,6 +209,7 @@ export interface WeeklyImputation {
   }[];
   semaine_status: 'brouillon' | 'soumis' | 'valide' | 'rejete';
   dates_semaine: string[];
+  commentaire?: string; // Commentaire du manager
 }
 
 export interface MonthlySummary {
@@ -405,6 +406,7 @@ export interface WeekStatus {
   validatedBy?: string;
   rejectedAt?: string;
   rejectionReason?: string;
+  commentaire?: string; // Commentaire du manager
 }
 export interface LightProject {
   id: number;

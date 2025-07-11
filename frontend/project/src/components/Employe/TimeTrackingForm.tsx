@@ -42,6 +42,7 @@ const TimeTrackingForm: React.FC = () => {
   });
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'weekly' | 'monthly' | 'history'>('weekly');
+  const [managerComment, setManagerComment] = useState<string | null>(null);
 
   // Catégories de temps
   const timeCategories: TimeCategory[] = [
@@ -66,6 +67,8 @@ const TimeTrackingForm: React.FC = () => {
         setProjects(projectsData);
         initializeEntries(projectsData, weekData);
         setSubmissionStatus(weekData.semaine_status);
+        setManagerComment(weekData.commentaire || null); 
+       
       } catch (err) {
         setError('Erreur lors du chargement des données');
         console.error(err);
@@ -80,7 +83,7 @@ const TimeTrackingForm: React.FC = () => {
   // Initialisation des entrées
   const initializeEntries = (projects: Projet[], weekData: WeeklyImputation) => {
     const newEntries: Record<string, Record<string, number>> = {};
-
+  
     projects.forEach(project => {
       newEntries[project.id] = {};
       timeCategories.forEach(cat => {
@@ -194,6 +197,17 @@ const TimeTrackingForm: React.FC = () => {
 
       <div className="mb-4">
         Statut: <span className="font-medium capitalize">{submissionStatus}</span>
+         Commentaire du manager: {managerComment}
+         {(submissionStatus === 'valide' || submissionStatus === 'rejete') && managerComment && (
+        <div className="mt-2 p-3 bg-gray-50 rounded border border-gray-200">
+          <div className="font-medium text-gray-700">
+            Commentaire du manager:
+          </div>
+          <div className="mt-1 text-gray-600">
+            {managerComment}
+          </div>
+        </div>
+      )}
       </div>
 
       <div className="overflow-x-auto">

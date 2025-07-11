@@ -1033,10 +1033,10 @@ export const getManagerDashboard = async (): Promise<ManagerDashboardData> => {
 export const validateWeek = async (
   weekId: number,
   action: 'valider' | 'rejeter',
-  comment = ''
+  commentaire = ''
 ): Promise<void> => {
-
-  if (action === 'rejeter' && !comment.trim()) {
+  
+  if (action === 'rejeter' && !commentaire.trim()) {
     throw new Error('Veuillez indiquer un motif de rejet.');
   }
 
@@ -1044,9 +1044,10 @@ export const validateWeek = async (
     await axios.post(
   
       `${API_BASE_URL}/gestion-imputations-projet/manager/dashboard/${weekId}/valider-semaine/`,
-      { action, commentaire: comment },
+      { action, commentaire: commentaire },
       { headers: getAuthHeaders() }
     );
+    console.log("validation avec le commentaire:",commentaire )
   } catch (error: any) {
     console.error('[validateWeek] API error:', error?.response?.data || error);
     throw new Error(
@@ -1519,6 +1520,7 @@ export const fetchWeeklyStatus = async (): Promise<WeekStatus> => {
     );
 
     const data = res.data;
+    console.log('Weekly status data:', data);
     const statusMap: Record<string, WeekStatus['status']> = {
       brouillon: 'draft',
       soumis   : 'submitted',
@@ -1535,6 +1537,7 @@ export const fetchWeeklyStatus = async (): Promise<WeekStatus> => {
                       : undefined,
       rejectedAt    : data.date_rejet,
       rejectionReason: data.commentaire,
+      commentaire: data.commentaire, 
     };
   } catch (e) {
     console.error('Error fetching weekly status:', e);

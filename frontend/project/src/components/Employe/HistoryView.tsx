@@ -730,6 +730,7 @@ const HistoryView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activities, setActivities] = useState<{
+  
     [date: string]: ImputationHoraire[];
   }>({});
   const [expandedDays, setExpandedDays] = useState<{ [date: string]: boolean }>(
@@ -749,7 +750,7 @@ const HistoryView: React.FC = () => {
   const [formations, setFormations] = useState<Formation[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingFormations, setLoadingFormations] = useState(false);
-
+ 
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -1409,6 +1410,14 @@ Object.keys(categoryDistribution).forEach(cat => {
                   Validée le {format(new Date(weekStatus.validatedAt), 'dd/MM/yyyy à HH:mm', { locale: fr })} par {weekStatus.validatedBy}
                 </div>
               )}
+              {weekStatus.commentaire && (
+              <div className="mt-2 pt-2 border-t border-green-200">
+                <div className="text-xs font-medium text-green-700 mb-1">Commentaire du manager :</div>
+                <div className="text-sm text-green-600 bg-green-50 p-2 rounded">
+                  {weekStatus.commentaire}
+                </div>
+      </div>
+    )}
             </div>
           )}
 
