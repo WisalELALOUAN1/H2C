@@ -520,7 +520,7 @@ export const generateUnifiedPDFReport = async (
     pdf.setFont('helvetica', 'bold');
     pdf.text('Projet', 15, yPosition + 7);
     pdf.text('Heures', 120, yPosition + 7);
-    pdf.text('Valeur (€)', 160, yPosition + 7);
+   
     
     yPosition += 10;
     
@@ -540,7 +540,7 @@ export const generateUnifiedPDFReport = async (
       
       pdf.text(projet.length > 25 ? projet.substring(0, 25) + '...' : projet, 15, yPosition + 5);
       pdf.text(`${info.heures.toFixed(1)}h`, 120, yPosition + 5);
-      pdf.text(`${info.valeur.toFixed(2)}`, 160, yPosition + 5);
+     
       
       yPosition += 8;
     });

@@ -150,7 +150,7 @@ const DashboardTab: React.FC<{
                 <tr>
                   <th className="px-6 py-4 text-left">Projet</th>
                   <th className="px-6 py-4 text-left">Heures</th>
-                  <th className="px-6 py-4 text-left">Valeur</th>
+                  
                 </tr>
               </thead>
               <tbody>
@@ -160,9 +160,7 @@ const DashboardTab: React.FC<{
                   }`}>
                     <td className="px-6 py-4 font-semibold text-amber-800">{projet}</td>
                     <td className="px-6 py-4 font-bold">{data.heures.toFixed(2)}h</td>
-                    <td className="px-6 py-4 font-bold text-green-600">
-                      €{data.valeur.toFixed(2)}
-                    </td>
+                    
                   </tr>
                 ))}
               </tbody>
@@ -787,8 +785,9 @@ const ManagerDashboard: React.FC = () => {
   const handleGenerateWeekReport = async (week: any) => {
     if (!dashboardData) {
       console.log("rein ");
-      return};
-    
+      return;
+    }
+
     try {
       console.log('Génération du rapport de semaine pour:', week);
       const weekData = await fetchManagerWeekEntries(week.employe_id, week.annee, week.semaine);
