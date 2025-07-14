@@ -207,10 +207,16 @@ class DemandeCongeRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIVie
         if instance.status != 'en attente':
             raise PermissionDenied("Seules les demandes en attente peuvent être supprimées")
         instance.delete()
-class DemandeCongeValidationView(APIView):
+class DemandeCongeValidationView(APIView): #corriger pour les tests
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, demande_id):
+        demande=DemandeConge.objects.filter(id=demande_id).first()
+        if not demande:
+            return Response({"error": "Demande introuvable"}, status=404)
+        equipes_manager=request.user.equipes_manager.all()
+        if request.user.role != "manager" or not equipes_manager.filter(membres=demande.user).exists():
+            return Response({"error": "Accès refusé"}, status=403)
         status = request.data.get("status")  
         commentaire = request.data.get("commentaire")
         try:

@@ -17,9 +17,9 @@ router.register(r'regles-membre', RegleMembreViewSet, basename='regles-membre')
 urlpatterns = [
     path('regles-globaux/', ReglesGlobauxRetrieveUpdateView.as_view(), name="regles-globaux"),
     path('employe/dashboard/', EmployeDashboardView.as_view()),
-    path('demande-conge/', DemandeCongeCreateView.as_view()),
-    path('manager/demandes-attente/', ManagerPendingRequestsView.as_view()),
-    path('manager/valider-demande/<int:demande_id>/', DemandeCongeValidationView.as_view()),
+    path('demande-conge/', DemandeCongeCreateView.as_view(),name='demande-conge-list'),
+    path('manager/demandes-attente/', ManagerPendingRequestsView.as_view(),name="manager-demandes-attente"),
+    path('manager/valider-demande/<int:demande_id>/', DemandeCongeValidationView.as_view(),name="manager-valider-demande"),
     path('demande-conge/<int:pk>/', DemandeCongeRetrieveUpdateDestroyView.as_view(), name='demande-conge-detail'),
     path('holidays/', HolidayAPIView.as_view(), name='holidays-api'),
     path('mon-tableau-de-bord/', EmployeDashboardView.as_view(), name='dashboard-employe'),
