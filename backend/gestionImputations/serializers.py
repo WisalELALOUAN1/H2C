@@ -36,7 +36,7 @@ class ProjetSerializer(serializers.ModelSerializer):
         extra_fields = ['equipe_nom', 'manager_equipe']
 
     def get_manager_equipe(self, obj):
-        if obj.equipe.manager:
+        if obj.equipe and obj.equipe.manager:
             return {
                 'id': obj.equipe.manager.id,
                 'nom': obj.equipe.manager.nom,
@@ -48,18 +48,18 @@ class SyntheseMensuelleSerializer(serializers.Serializer):
     heures = serializers.DecimalField(max_digits=10, decimal_places=2)
     valeur = serializers.DecimalField(max_digits=12, decimal_places=2)
 class ImputationHoraireSerializer(serializers.ModelSerializer):
-    # ✅ Champs en lecture seule pour l'affichage
+   
     formation_nom = serializers.CharField(source='formation.intitule', read_only=True)
     projet_nom = serializers.CharField(source='projet.nom', read_only=True)
     projet_identifiant = serializers.CharField(source='projet.identifiant', read_only=True)
     
-    # ✅ Objets complets pour les relations (en lecture seule)
+
     employe = UtilisateurSerializer(read_only=True)
     projet = ProjetSerializer(read_only=True)
     formation = FormationSerializer(read_only=True)
     valide_par = UtilisateurSerializer(read_only=True)
     
-    # ✅ Champs pour l'écriture (IDs uniquement)
+    
     employe_id = serializers.IntegerField(write_only=True, required=False)
     projet_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     formation_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
@@ -69,11 +69,11 @@ class ImputationHoraireSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'date', 'heures', 'categorie', 'description', 'valide',
             'date_saisie', 'date_validation',
-            # Relations complètes (lecture)
+            
             'employe', 'projet', 'formation', 'valide_par',
-            # Champs simplifiés (lecture)
+            
             'formation_nom', 'projet_nom', 'projet_identifiant',
-            # IDs pour l'écriture
+            
             'employe_id', 'projet_id', 'formation_id'
         ]
         extra_kwargs = {
@@ -86,7 +86,7 @@ class ImputationHoraireSerializer(serializers.ModelSerializer):
         """Validation des données"""
         cat = data.get('categorie')
 
-        # ✅ Gestion des IDs pour l'écriture
+        
         if 'employe_id' in data:
             try:
                 data['employe'] = Utilisateur.objects.get(id=data.pop('employe_id'))
@@ -113,14 +113,14 @@ class ImputationHoraireSerializer(serializers.ModelSerializer):
             else:
                 data['formation'] = None
 
-        # ✅ Règles de validation métier
+        
         if cat == 'projet' and not data.get('projet'):
             raise serializers.ValidationError({'projet': 'Projet requis pour cette catégorie'})
         
         if cat == 'formation' and not data.get('formation'):
             raise serializers.ValidationError({'formation': 'Formation requise pour cette catégorie'})
 
-        # ✅ Exclusivité projet/formation
+       
         if cat == 'projet':
             data['formation'] = None
         elif cat == 'formation':
@@ -129,7 +129,7 @@ class ImputationHoraireSerializer(serializers.ModelSerializer):
             data['projet'] = None
             data['formation'] = None
 
-        # ✅ Validation des heures
+       
         heures = data.get('heures')
         if heures is not None:
             if heures <= 0 or heures > 24:
@@ -143,7 +143,7 @@ class ImputationHoraireSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         """Mise à jour d'une imputation"""
-        # ✅ Empêcher la modification si validée
+        # Empecher la modification si validee
         if instance.valide and not self.context.get('force_update', False):
             raise serializers.ValidationError('Impossible de modifier une imputation validée')
         
@@ -157,7 +157,7 @@ class ImputationHoraireSerializer(serializers.ModelSerializer):
         """Personnalisation de la représentation"""
         data = super().to_representation(instance)
         
-        # ✅ Ajouter des informations supplémentaires si nécessaire
+        
         if instance.formation and instance.formation.justificatif:
             request = self.context.get('request')
             if request:

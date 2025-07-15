@@ -32,7 +32,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if self.request.user.role == 'manager':
             return queryset.filter(equipe__manager=self.request.user)
         elif self.request.user.role == 'employe':
-            return queryset.filter(equipe__in=self.request.user.equipe_membres.all())
+            return queryset.filter(equipe__in=self.request.user.equipes_membre.all())
         print (queryset)
         return queryset
 
@@ -80,18 +80,19 @@ class ManagerImputationViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Permission denied.'}, status=403)
         equipes_managed = Equipe.objects.filter(manager=request.user)
         semaines_a_valider=SemaineImputation.objects.filter(employe__equipes_membre__in=equipes_managed,
-            statut='soumis').distinct
+            statut='soumis').distinct()
         #Calcul de la charge de l'equipe
         today=date.today()
-        date_debut_semaine=today-today.weekday()
-        date_fin_semaine=date_debut_semaine+timedelta(days=6)
+        date_debut_semaine = today - timedelta(days=today.weekday()) ##test
+        date_fin_semaine = date_debut_semaine + timedelta(days=6) ##test
         imputations=ImputationHoraire.objects.filter(employe__equipes_membre__in=equipes_managed,
             date__range=[date_debut_semaine, date_fin_semaine])
         charge_par_projet = {}
         for imputation in imputations:
-            if imputation.projet.nom not in charge_par_projet:
-                charge_par_projet[imputation.projet.nom] = 0
-            charge_par_projet[imputation.projet.nom] += float(imputation.heures)
+            projet_nom = imputation.projet.nom if imputation.projet else "Sans projet"
+            if projet_nom not in charge_par_projet:
+                charge_par_projet[projet_nom] = 0
+            charge_par_projet[projet_nom] += float(imputation.heures)
         
         serializer = SemaineImputationSerializer(semaines_a_valider, many=True)
         data = serializer.data
