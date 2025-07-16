@@ -16,7 +16,7 @@ class EquipeSerializer(serializers.ModelSerializer):
         model = Equipe
         fields = ['id', 'nom', 'description', 'manager', 'membres', 'date_creation', 'status']
 
-# ---  (POST/PUT) ---
+#post/put
 class EquipeCreateUpdateSerializer(serializers.ModelSerializer):
     manager = serializers.PrimaryKeyRelatedField(
         queryset=Utilisateur.objects.filter(role='manager')
