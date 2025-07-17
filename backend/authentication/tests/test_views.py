@@ -1,7 +1,8 @@
-import pytest
-from django.urls import reverse
-from rest_framework.test import APIClient
+import pytest 
+from django.urls import reverse # pour generer les urls des endpoints a partir de leurs noms
+from rest_framework.test import APIClient # pour la simulation de requetes API
 from authentication.models import Utilisateur
+#/auth/register/
 @pytest.mark.django_db
 def test_register_view_creates_user():
     client = APIClient()

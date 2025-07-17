@@ -72,7 +72,7 @@ def test_imputationhoraire_creation(admin_user, projet1):
 
 @pytest.mark.django_db
 def test_imputationhoraire_unique_projet(admin_user, projet1):
-    # Création OK
+    # Creation OK
     ImputationHoraire.objects.create(
         employe=admin_user,
         projet=projet1,
@@ -81,7 +81,7 @@ def test_imputationhoraire_unique_projet(admin_user, projet1):
         categorie="projet",
         description="Test"
     )
-    # Violation unicité pour la même clé (catégorie projet)
+
     with pytest.raises(IntegrityError):
         ImputationHoraire.objects.create(
             employe=admin_user,
@@ -103,7 +103,7 @@ def test_imputationhoraire_unique_formation(admin_user, formation1):
         categorie="formation",
         description="Cours"
     )
-    # Violation unicité pour la même clé (catégorie formation)
+ 
     with pytest.raises(IntegrityError):
         ImputationHoraire.objects.create(
             employe=admin_user,
@@ -163,7 +163,7 @@ def test_formation_str(employe_user):
     )
     assert "Data Science" in str(f)
 
-# --- Fixturage rapide pour projet1 et formation1 si besoin ---
+
 @pytest.fixture
 def projet1(equipe1):
     return Projet.objects.create(
