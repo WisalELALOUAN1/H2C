@@ -632,11 +632,6 @@ class ManagerDashboardViewSet(viewsets.ViewSet):
 
         return Response(SemaineImputationSerializer(week).data)
 
-   
-    
-
-    
-    
 class SemaineCouranteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 

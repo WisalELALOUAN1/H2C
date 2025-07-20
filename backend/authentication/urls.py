@@ -19,7 +19,7 @@ from .views import (
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
     path('password-reset/', PasswordResetRequestView.as_view(), name="password_reset"),
-    path('password-reset-confirm/', PasswordResetConfirmView.as_view()),
+    path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
     #path('login/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),  # login JWT custom
     path('login/', CustomLoginView.as_view(), name='custom_login'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

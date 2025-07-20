@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB:       ${DB_NAME}
+      POSTGRES_USER:     ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+
+  backend:
+    build: ./backend
+
+    volumes: ["./backend:/app"]
+    ports: ["8000:8000"]
+    depends_on: [db]
+    env_file: ["./backend/.env"]
+    environment:
+      DJANGO_SUPERUSER_EMAIL:    test@gmail.com
+      DJANGO_SUPERUSER_PASSWORD: adminPassword
+      DJANGO_SUPERUSER_NOM:      Admin
+      DJANGO_SUPERUSER_PRENOM:   Test
+      DJANGO_SUPERUSER_ROLE:     admin
+
+  frontend:
+    build: ./frontend/project
+    ports: ["5173:5173"]
+    volumes:
+      - ./frontend/project:/app
+      - /app/node_modules
+    depends_on: [backend]
+
+volumes:
+  pgdata: 
+

@@ -67,7 +67,7 @@ def test_membre_serializer():
     equipe = Equipe.objects.create(nom="Equipe Membres", manager=manager)
     equipe.membres.set([m1, m2])
     data = EquipeAvecMembresSerializer(equipe).data
-    # Vérifie que tous les membres sont bien dans la sortie sérialisée
+    # Verifie que tous les membres sont bien dans la sortie serialisee
     emails = {m["email"] for m in data["membres"]}
     assert "m1@example.com" in emails
     assert "m2@example.com" in emails

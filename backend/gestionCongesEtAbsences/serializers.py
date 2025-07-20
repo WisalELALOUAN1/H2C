@@ -108,7 +108,7 @@ class SoldeDetailSerializer(serializers.ModelSerializer):
         ]
     
     def get_type(self, obj):
-        """Détermine si c'est un crédit ou débit"""
+        """Determine si c'est un credit oudebit"""
         if obj.motif in ['ACQUISITION', 'REGULARISATION']:
             return 'credit'
         return 'debit'

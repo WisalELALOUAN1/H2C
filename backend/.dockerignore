@@ -1,0 +1,30 @@
+# Ignorer les environnements virtuels
+venv
+env
+H2C
+# Fichiers d’environnement
+.env
+
+# Dossiers de cache et compilation Python
+__pycache__/
+*.pyc
+*.pyo
+
+
+
+# Fichier de couverture de tests
+.coverage
+
+# Base de données locale sqlite
+db.sqlite3
+
+# Dossiers/tests temporaires
+.pytest_cache/
+htmlcov/
+rapport_tests.*
+
+Dockerfile
+# VSCode/IDE
+.vscode/
+.idea/
+*.swp
