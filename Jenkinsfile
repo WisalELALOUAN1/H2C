@@ -34,7 +34,7 @@ pipeline {
                     $class: 'GitSCM',
                     branches: [[name: env.GIT_BRANCH ?: 'main']],
                     extensions: [
-                        [$class: 'CloneOption', depth: 1, shallow: true]  # Clone shallow pour gagner du temps
+                        [$class: 'CloneOption', depth: 1, shallow: true]  
                     ]
                 ])
             }
