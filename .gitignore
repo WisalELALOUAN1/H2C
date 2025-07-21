@@ -1,9 +1,9 @@
 #Python virtualenvs 
-backend/H2C/
+#backend/H2C/
 
 
 # ─── Environment files ───
-backend/.env
+#backend/.env
 
 
 

@@ -1,5 +1,5 @@
 pipeline {
-    agent any                      // ← Jenkins choisira un agent Linux
+    agent any
 
     options {
         timeout(time: 30, unit: 'MINUTES')
@@ -18,19 +18,31 @@ pipeline {
             steps {
                 sh '''
                     docker --version
-                    docker compose version
+                    docker-compose version
                 '''
             }
         }
 
         stage('Checkout') {
-            steps { checkout scm }
+    steps {
+        retry(3) {
+            checkout([
+                $class: 'GitSCM',
+                branches: [[name: '*/main']],
+                extensions: [],
+                userRemoteConfigs: [[
+                    url: 'https://github.com/WisalELALOUAN1/H2C',
+                    credentialsId: '' // Add credentials if needed
+                ]]
+            ])
         }
+    }
+}
 
         stage('Build des images') {
             steps {
                 sh '''
-                    docker compose -f $COMPOSE_FILE build --no-cache
+                    docker-compose -f $COMPOSE_FILE build --no-cache
                     docker tag h2c-backend h2c-backend:$TAG
                 '''
             }
@@ -39,15 +51,15 @@ pipeline {
         stage('Tests') {
             steps {
                 sh '''
-                    docker compose -f $COMPOSE_FILE up  -d db
-                    docker compose -f $COMPOSE_FILE run --rm backend \
-                          pytest --junitxml=test-results.xml
+                    docker-compose -f $COMPOSE_FILE up -d db
+                    docker-compose -f $COMPOSE_FILE run --rm backend \
+                        pytest --junitxml=test-results.xml
                 '''
             }
             post {
                 always {
                     junit 'test-results.xml'
-                    sh 'docker compose -f $COMPOSE_FILE down'
+                    sh 'docker-compose -f $COMPOSE_FILE down'
                 }
             }
         }
@@ -62,10 +74,10 @@ pipeline {
                 )]) {
                     sh '''
                         echo $REGISTRY_TOKEN | docker login ghcr.io \
-                              -u $REGISTRY_USER --password-stdin
+                            -u $REGISTRY_USER --password-stdin
 
                         docker tag h2c-backend:$TAG \
-                              ghcr.io/WisalELALOUAN1/h2c-backend:$TAG
+                            ghcr.io/WisalELALOUAN1/h2c-backend:$TAG
 
                         docker push ghcr.io/WisalELALOUAN1/h2c-backend:$TAG
                     '''
@@ -76,10 +88,10 @@ pipeline {
 
     post {
         always {
-            sh 'docker compose -f $COMPOSE_FILE down --remove-orphans || true'
+            sh 'docker-compose -f $COMPOSE_FILE down --remove-orphans || true'
             cleanWs()
         }
-        success { echo ' Build réussi !' }
-        failure { echo ' Échec du build – consultez les logs.' }
+        success { echo ' Build réussi !' }
+        failure { echo ' Échec du build – consultez les logs.' }
     }
 }
