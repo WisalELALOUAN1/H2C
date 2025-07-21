@@ -83,7 +83,7 @@ pipeline {
         stage('Push Registry') {
             when { 
                 branch 'main' 
-                beforeAgent true  # Évite de démarrer l'agent si la condition n'est pas remplie
+                beforeAgent true  
             }
             environment {
                 REGISTRY = 'ghcr.io/monorg'
