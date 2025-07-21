@@ -1,66 +1,93 @@
 pipeline {
     agent {
-        label 'docker'  // Utilise un nœud Jenkins avec le label 'docker'
+        label 'docker'  // Nécessite un nœud avec Docker installé
     }
 
     options {
-        buildDiscarder(logRotator(numToKeepStr: '30'))
+        buildDiscarder(logRotator(numToKeepStr: '5'))  // Réduit le stockage des builds
+        timeout(time: 20, unit: 'MINUTES')  // Timeout global réduit
         timestamps()
     }
 
     environment {
         COMPOSE_FILE = 'docker-compose.yml'
         TAG = "${env.GIT_COMMIT.take(7)}"
+        // Cache Docker pour accélérer les builds
+        DOCKER_BUILDKIT = "1"
+        COMPOSE_DOCKER_CLI_BUILD = "1"
     }
 
     stages {
-        stage('Vérifier Docker') {
+        stage('Préparation') {
             steps {
                 sh '''
-                    docker --version || { echo "ERREUR: Docker non installé"; exit 1; }
-                    docker compose version || { echo "ERREUR: Docker Compose non installé"; exit 1; }
+                    docker --version
+                    docker compose version
+                    docker system df  # Vérifie l'espace disque
                 '''
             }
         }
 
         stage('Checkout') {
-            steps { 
-                checkout scm 
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: env.GIT_BRANCH ?: 'main']],
+                    extensions: [
+                        [$class: 'CloneOption', depth: 1, shallow: true]  # Clone shallow pour gagner du temps
+                    ]
+                ])
             }
         }
 
         stage('Tests backend') {
             steps {
                 sh '''
-                    docker compose -f $COMPOSE_FILE up -d db
-                    docker compose -f $COMPOSE_FILE run --rm backend \
-                       pytest --junitxml=report_backend.xml
-                    docker compose -f $COMPOSE_FILE down -v
+                    # Lance seulement les services nécessaires
+                    docker compose -f $COMPOSE_FILE up -d db redis  # Exemple de services dépendants
+                    docker compose -f $COMPOSE_FILE run --rm -T backend \
+                        pytest --junitxml=report_backend.xml -n auto  # Exécution parallèle des tests
                 '''
             }
-            post { 
-                always { 
-                    junit 'report_backend.xml' 
-                } 
+            post {
+                always {
+                    junit 'report_backend.xml'
+                    sh 'docker compose -f $COMPOSE_FILE stop db redis'
+                }
             }
         }
 
-        stage('Build images') {
-            steps {
-                sh '''
-                    docker compose -f $COMPOSE_FILE build backend frontend
-                    docker tag h2c-backend  h2c-backend:$TAG
-                    docker tag h2c-frontend h2c-frontend:$TAG
-                '''
+        stage('Build parallèle') {
+            parallel {
+                stage('Build Backend') {
+                    steps {
+                        sh '''
+                            docker compose -f $COMPOSE_FILE build backend \
+                                --progress=plain \
+                                --build-arg BUILDKIT_INLINE_CACHE=1
+                        '''
+                    }
+                }
+                stage('Build Frontend') {
+                    steps {
+                        sh '''
+                            docker compose -f $COMPOSE_FILE build frontend \
+                                --progress=plain \
+                                --build-arg BUILDKIT_INLINE_CACHE=1
+                        '''
+                    }
+                }
             }
         }
 
-        stage('Push registry') {
+        stage('Push Registry') {
             when { 
                 branch 'main' 
+                beforeAgent true  # Évite de démarrer l'agent si la condition n'est pas remplie
             }
             environment {
                 REGISTRY = 'ghcr.io/monorg'
+                CACHE_TAG = 'latest'  // Tag pour le cache
             }
             steps {
                 withCredentials([usernamePassword(
@@ -69,11 +96,22 @@ pipeline {
                     passwordVariable: 'REGISTRY_TOKEN'
                 )]) {
                     sh """
-                        echo "$REGISTRY_TOKEN" | docker login $REGISTRY -u "$REGISTRY_USER" --password-stdin
-                        docker tag h2c-backend:$TAG  $REGISTRY/h2c-backend:$TAG
-                        docker tag h2c-frontend:$TAG $REGISTRY/h2c-frontend:$TAG
-                        docker push $REGISTRY/h2c-backend:$TAG
-                        docker push $REGISTRY/h2c-frontend:$TAG
+                        echo "\$REGISTRY_TOKEN" | docker login \$REGISTRY -u "\$REGISTRY_USER" --password-stdin
+                        
+                        # Tag et push avec cache
+                        docker tag h2c-backend \$REGISTRY/h2c-backend:\$TAG
+                        docker tag h2c-backend \$REGISTRY/h2c-backend:\$CACHE_TAG
+                        
+                        docker tag h2c-frontend \$REGISTRY/h2c-frontend:\$TAG
+                        docker tag h2c-frontend \$REGISTRY/h2c-frontend:\$CACHE_TAG
+                        
+                        docker push \$REGISTRY/h2c-backend:\$TAG &
+                        docker push \$REGISTRY/h2c-frontend:\$TAG &
+                        wait  # Push parallèle
+                        
+                        docker push \$REGISTRY/h2c-backend:\$CACHE_TAG &
+                        docker push \$REGISTRY/h2c-frontend:\$CACHE_TAG &
+                        wait
                     """
                 }
             }
@@ -82,8 +120,11 @@ pipeline {
 
     post {
         always {
-            sh 'docker compose -f $COMPOSE_FILE down -v || true'
-            cleanWs()  // Nettoyer l'espace de travail
+            sh '''
+                docker compose -f $COMPOSE_FILE down --remove-orphans --volumes --timeout 1
+                docker system prune -f --filter "until=24h"  # Nettoyage partiel
+            '''
+            cleanWs()
         }
     }
 }
