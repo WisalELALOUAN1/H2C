@@ -1,7 +1,5 @@
 pipeline {
-    agent {
-        label 'docker'  // Nécessite un nœud avec Docker installé
-    }
+    agent any
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '5'))  // Réduit le stockage des builds
