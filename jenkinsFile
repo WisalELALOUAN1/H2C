@@ -39,22 +39,33 @@ pipeline {
         }
 
         stage('Push registry') {
-            when { branch 'main' }
-            environment {
-                REGISTRY = 'ghcr.io/monorg'
-            }
-            steps {
-                withCredentials([string(credentialsId: 'REGISTRY_TOKEN', variable: 'TOKEN')]) {
-                    sh '''
-                        echo $TOKEN | docker login $REGISTRY -u $BUILD_USER_ID --password-stdin
-                        docker tag h2c-backend:$TAG  $REGISTRY/h2c-backend:$TAG
-                        docker tag h2c-frontend:$TAG $REGISTRY/h2c-frontend:$TAG
-                        docker push $REGISTRY/h2c-backend:$TAG
-                        docker push $REGISTRY/h2c-frontend:$TAG
-                    '''
-                }
-            }
+    when { branch 'main' }
+    environment {
+        // Ça peut rester ton chemin complet, ou juste ghcr.io si tu préfères
+        REGISTRY = 'ghcr.io/monorg'
+    }
+    steps {
+        // On bind la credential GHCR_CREDS sur deux variables
+        withCredentials([usernamePassword(
+            credentialsId: 'GHCR_CREDS',
+            usernameVariable: 'REGISTRY_USER',
+            passwordVariable: 'REGISTRY_TOKEN'
+        )]) {
+            sh """
+              # On se loggue avec USER + TOKEN
+              echo "$REGISTRY_TOKEN" \
+                | docker login $REGISTRY -u "$REGISTRY_USER" --password-stdin
+
+              # On tague les images avec le bon nom complet
+              docker tag h2c-backend:$TAG  $REGISTRY/h2c-backend:$TAG
+              docker tag h2c-frontend:$TAG $REGISTRY/h2c-frontend:$TAG
+
+              # Et on push
+              docker push $REGISTRY/h2c-backend:$TAG
+              docker push $REGISTRY/h2c-frontend:$TAG
+            """
         }
+    }
     }
 
     post {
