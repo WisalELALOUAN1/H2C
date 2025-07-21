@@ -1,8 +1,6 @@
 pipeline {
-     agent {
-        docker {
-            label 'docker'
-        }
+    agent {
+        label 'docker'  // Utilise un nœud Jenkins avec le label 'docker'
     }
 
     options {
@@ -16,8 +14,19 @@ pipeline {
     }
 
     stages {
+        stage('Vérifier Docker') {
+            steps {
+                sh '''
+                    docker --version || { echo "ERREUR: Docker non installé"; exit 1; }
+                    docker compose version || { echo "ERREUR: Docker Compose non installé"; exit 1; }
+                '''
+            }
+        }
+
         stage('Checkout') {
-            steps { checkout scm }
+            steps { 
+                checkout scm 
+            }
         }
 
         stage('Tests backend') {
@@ -29,7 +38,11 @@ pipeline {
                     docker compose -f $COMPOSE_FILE down -v
                 '''
             }
-            post { always { junit 'report_backend.xml' } }
+            post { 
+                always { 
+                    junit 'report_backend.xml' 
+                } 
+            }
         }
 
         stage('Build images') {
@@ -43,7 +56,9 @@ pipeline {
         }
 
         stage('Push registry') {
-            when { branch 'main' }
+            when { 
+                branch 'main' 
+            }
             environment {
                 REGISTRY = 'ghcr.io/monorg'
             }
@@ -68,6 +83,7 @@ pipeline {
     post {
         always {
             sh 'docker compose -f $COMPOSE_FILE down -v || true'
+            cleanWs()  // Nettoyer l'espace de travail
         }
     }
 }
