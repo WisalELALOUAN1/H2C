@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+     agent {
+        docker {
+            image 'docker:dind'  # Docker-in-Docker
+            args '--privileged -v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '30'))
