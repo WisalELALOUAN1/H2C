@@ -24,8 +24,20 @@ pipeline {
         }
 
         stage('Checkout') {
-            steps { checkout scm }
+    steps {
+        retry(3) {
+            checkout([
+                $class: 'GitSCM',
+                branches: [[name: '*/main']],
+                extensions: [],
+                userRemoteConfigs: [[
+                    url: 'https://github.com/WisalELALOUAN1/H2C',
+                    credentialsId: '' // Add credentials if needed
+                ]]
+            ])
         }
+    }
+}
 
         stage('Build des images') {
             steps {
@@ -79,7 +91,7 @@ pipeline {
             sh 'docker-compose -f $COMPOSE_FILE down --remove-orphans || true'
             cleanWs()
         }
-        success { echo ' Build réussi !' }
-        failure { echo ' Échec du build – consultez les logs.' }
+        success { echo '✅ Build réussi !' }
+        failure { echo '❌ Échec du build – consultez les logs.' }
     }
 }
