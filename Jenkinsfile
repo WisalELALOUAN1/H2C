@@ -73,7 +73,7 @@ pipeline {
                                 branches: [[name: '*/main']],
                                 extensions: [
                                     [$class: 'CloneOption', 
-                                     shallow: false, // Try deep clone first
+                                     shallow: false,
                                      timeout: 60],
                                     [$class: 'CleanBeforeCheckout']
                                 ],
@@ -123,8 +123,8 @@ pipeline {
                     echo "Building Docker images..."
                     docker-compose -f $COMPOSE_FILE build --no-cache --pull
                     
-                    # Tag images
-                    docker tag $(docker-compose images -q backend) h2c-backend:$TAG || echo "Backend image not found"
+                    # Tag images using service name directly
+                    docker tag h2c-backend $REGISTRY/h2c-backend:$TAG || echo "Backend image not found"
                 '''
             }
         }
@@ -133,10 +133,19 @@ pipeline {
             steps {
                 sh '''
                     echo "Starting tests..."
+                    # Stop any existing containers first
+                    docker-compose -f $COMPOSE_FILE down || true
+                    
+                    # Start services with different PostgreSQL port if needed
                     docker-compose -f $COMPOSE_FILE up -d db
                     
-                    # Wait for database to be ready
-                    sleep 10
+                    # Wait for database to be ready (better to use healthcheck)
+                    for i in {1..10}; do
+                        if docker-compose exec db pg_isready; then
+                            break
+                        fi
+                        sleep 5
+                    done
                     
                     # Run tests
                     docker-compose -f $COMPOSE_FILE run --rm backend \
@@ -178,12 +187,13 @@ pipeline {
                                 echo $REGISTRY_TOKEN | docker login ghcr.io \
                                     -u $REGISTRY_USER --password-stdin
                                 
-                                # Tag and push
-                                docker tag h2c-backend:$TAG $REGISTRY/h2c-backend:$TAG
-                                docker tag h2c-backend:$TAG $REGISTRY/h2c-backend:latest
-                                
+                                # Push both tagged versions
                                 docker push $REGISTRY/h2c-backend:$TAG
                                 docker push $REGISTRY/h2c-backend:latest
+                                
+                                # Cleanup local images
+                                docker rmi $REGISTRY/h2c-backend:$TAG || true
+                                docker rmi $REGISTRY/h2c-backend:latest || true
                             '''
                         }
                     } catch (Exception e) {
@@ -201,8 +211,9 @@ pipeline {
                 try {
                     sh '''
                         echo "Cleaning up Docker resources..."
-                        docker-compose -f $COMPOSE_FILE down --remove-orphans --volumes || true
+                        docker-compose -f $COMPOSE_FILE down --remove-orphans --volumes --timeout 1 || true
                         docker system prune -f || true
+                        docker network prune -f || true
                     '''
                 } catch (Exception e) {
                     echo "Cleanup error: ${e.message}"
