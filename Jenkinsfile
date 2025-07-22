@@ -2,26 +2,26 @@ pipeline {
     agent any
 
     options {
-        timeout(time: 60, unit: 'MINUTES')  // Augmentation du timeout global
+        timeout(time: 60, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '5'))
         timestamps()
-        disableConcurrentBuilds()  // Évite les conflits de builds
+        disableConcurrentBuilds()
     }
 
     environment {
         COMPOSE_FILE = 'docker-compose.yml'
         TAG = "${env.GIT_COMMIT.take(7)}"
-        GIT_SSL_NO_VERIFY = 'true'  // Optionnel: seulement si problèmes de certificats
     }
 
     stages {
         stage('Préparation') {
             steps {
                 sh '''
-                    git config --global http.postBuffer 104857600  # Augmente le buffer HTTP
-                    git config --global http.version HTTP/1.1      # Désactive HTTP/2
+                    git config --global http.postBuffer 104857600
+                    git config --global http.version HTTP/1.1
+                    sudo chmod 666 /var/run/docker.sock || true  # Solution temporaire
                 '''
-                cleanWs()  // Nettoie le workspace avant le checkout
+                cleanWs()
             }
         }
 
@@ -36,23 +36,20 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                retry(5) {  // Augmentation du nombre de tentatives
+                retry(5) {
                     checkout([
                         $class: 'GitSCM',
                         branches: [[name: '*/main']],
                         extensions: [
-                            [$class: 'CloneOption', 
+                            [$class: 'CloneOption',
                              shallow: true,
                              depth: 1,
-                             timeout: 30,  // Timeout en minutes
-                             noTags: true],
-                            [$class: 'CleanBeforeCheckout'],
-                            [$class: 'GitLFSPull']  // Important si vous utilisez LFS
+                             timeout: 30],
+                            [$class: 'CleanBeforeCheckout']
                         ],
                         userRemoteConfigs: [[
                             url: 'https://github.com/WisalELALOUAN1/H2C',
-                            credentialsId: '',  // À remplir si nécessaire
-                            timeout: 30  // Timeout en minutes
+                            credentialsId: ''
                         ]]
                     ])
                 }
@@ -79,7 +76,7 @@ pipeline {
             post {
                 always {
                     junit 'test-results.xml'
-                    sh 'docker-compose -f $COMPOSE_FILE down'
+                    sh 'docker-compose -f $COMPOSE_FILE down || true'
                 }
             }
         }
@@ -95,10 +92,8 @@ pipeline {
                     sh '''
                         echo $REGISTRY_TOKEN | docker login ghcr.io \
                             -u $REGISTRY_USER --password-stdin
-
                         docker tag h2c-backend:$TAG \
                             ghcr.io/WisalELALOUAN1/h2c-backend:$TAG
-
                         docker push ghcr.io/WisalELALOUAN1/h2c-backend:$TAG
                     '''
                 }
@@ -118,11 +113,12 @@ pipeline {
             }
         }
         success { 
-            echo 'Build réussi! ' 
+            echo 'Build réussi! ✅' 
+            // Ici vous pourriez ajouter une vraie notification si configurée
         }
         failure { 
-            echo 'Échec du build - Consultez les logs ci-dessus pour détails ' 
-            slackSend(color: 'danger', message: "Échec du build: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
+            echo 'Échec du build - Consultez les logs ci-dessus pour détails ❌'
+            // Retirez ou configurez slackSend si nécessaire
         }
     }
 }
