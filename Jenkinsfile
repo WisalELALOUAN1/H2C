@@ -91,12 +91,9 @@ pipeline {
             sh 'docker-compose -f $COMPOSE_FILE down --remove-orphans || true'
             cleanWs()
         }
-<<<<<<< HEAD
+
         success { echo ' Build réussi !' }
         failure { echo ' Échec du build – consultez les logs.' }
-=======
-        success { echo '✅ Build réussi !' }
-        failure { echo '❌ Échec du build – consultez les logs.' }
->>>>>>> 097d64a7cce9528ce4462ed10130b26acf69e0c8
+
     }
 }
