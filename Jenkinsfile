@@ -31,9 +31,9 @@ stage('Checkout') {
                 branches: [[name: '*/main']],
                 extensions: [
                     [$class: 'CloneOption', 
-                     shallow: true,  /
-                     depth: 1,      // Seulement le dernier commit
-                     timeout: 60],  // Timeout à 60 minutes
+                     shallow: true,  
+                     depth: 1,      
+                     timeout: 60]
                   
                 ],
                 userRemoteConfigs: [[
