@@ -23,16 +23,22 @@ pipeline {
             }
         }
 
-        stage('Checkout') {
+stage('Checkout') {
     steps {
         retry(3) {
             checkout([
                 $class: 'GitSCM',
                 branches: [[name: '*/main']],
-                extensions: [],
+                extensions: [
+                    [$class: 'CloneOption', 
+                     shallow: true,  /
+                     depth: 1,      // Seulement le dernier commit
+                     timeout: 60],  // Timeout à 60 minutes
+                  
+                ],
                 userRemoteConfigs: [[
                     url: 'https://github.com/WisalELALOUAN1/H2C',
-                    credentialsId: '' // Add credentials if needed
+                    credentialsId: '' // Ajoutez un credential si nécessaire
                 ]]
             ])
         }
