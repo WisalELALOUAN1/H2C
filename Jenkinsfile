@@ -222,13 +222,13 @@ pipeline {
             }
         }
         success { 
-            echo 'Build réussi! ✅' 
+            echo 'Build réussi! ' 
         }
         failure { 
-            echo 'Échec du build - Consultez les logs ci-dessus pour détails ❌'
+            echo 'Échec du build - Consultez les logs ci-dessus pour détails '
         }
         unstable {
-            echo 'Build instable - Certaines étapes ont échoué ⚠️'
+            echo 'Build instable - Certaines étapes ont échoué ⚠'
         }
     }
 }
