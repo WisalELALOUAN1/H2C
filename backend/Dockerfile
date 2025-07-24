@@ -10,10 +10,10 @@ COPY requirements.txt .
 
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copie tout le code du backend (app, manage.py, etc.)
+
 COPY . .
 
-# Lancement du serveur Gunicorn pointant sur sgrip
+
 CMD ["bash", "-c", "\
     python manage.py migrate && \
     python create_superuser.py && \
