@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Copie requirements.txt
+
 COPY requirements.txt .
 
 RUN pip install --upgrade pip && pip install -r requirements.txt
