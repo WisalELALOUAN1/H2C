@@ -34,7 +34,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange, isCol
         return [
           ...baseItems,
           { id: "teams", label: "Gestion équipes", icon: Users },
-          { id: "analytics", label: "Analytiques", icon: BarChart3 },
+          
           { id: "global-rules", label: "Règles globales", icon: Target },
           { id: "settings", label: "Paramètres", icon: Settings },
           { id: "solde-history", label: "Historique soldes", icon: History },
